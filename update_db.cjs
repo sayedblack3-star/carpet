@@ -2,7 +2,7 @@ const fs = require('fs');
 
 async function executeSql() {
   try {
-    const query = fs.readFileSync('C:\\Users\\Erorr\\Desktop\\فيدويهات قطط\\carpet-land\\fix_users_table.sql', 'utf8');
+    const query = fs.readFileSync('C:\\Users\\Erorr\\Desktop\\فيدويهات قطط\\carpet-land\\fix_delete_cascade.sql', 'utf8');
     const projectRef = 'gulaggpzonzylxrwugla';
     const token = 'sbp_eacfe6193ecd92bee4867b250cfea97930906625';
 

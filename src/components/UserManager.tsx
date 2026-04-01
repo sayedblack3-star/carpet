@@ -137,7 +137,12 @@ const UserManager: React.FC = () => {
         toast.success('تم حذف المستخدم بنجاح');
       } catch (error: any) {
         console.error("Error deleting user:", error);
-        toast.error('حدث خطأ أثناء حذف المستخدم');
+        const errorMessage = error.message || 'حدث خطأ أثناء حذف المستخدم';
+        toast.error(`فشل الحذف: ${errorMessage}`);
+        
+        if (error.code === '23503') {
+          toast.error('لا يمكن حذف المستخدم لوجود بيانات مرتبطة به (طلبات أو ورديات). يرجى تشغيل ملف اصلاح القيود في قاعدة البيانات.');
+        }
       }
     }
   };
