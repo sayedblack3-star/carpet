@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { AppUser, UserRole, BRANCHES } from '../types';
-import { Users, UserPlus, Trash2, Edit2, Shield, X, Check, Power, PowerOff } from 'lucide-react';
+import { Users, UserPlus, Trash2, Edit2, Shield, X, Check, Power, PowerOff, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 
@@ -157,6 +157,19 @@ const UserManager: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    
+    if (error) {
+      toast.error('حدث خطأ أثناء إرسال الرابط: ' + error.message);
+    } else {
+      toast.success('تم إرسال رابط إعادة تعيين كلمة السر لإيميل الموظف بنجاح');
+      await logAction('إرسال رابط كلمة سر', `تم إرسال رابط استعادة للموظف: ${email}`);
+    }
+  };
+
   const resetForm = () => {
     setFormData({ email: '', role: 'salesperson', name: '', branchId: '', isActive: true });
     setIsEditing(false);
@@ -288,6 +301,13 @@ const UserManager: React.FC = () => {
                         <button onClick={() => toggleActive(u)} className={`p-2 rounded-lg transition ${u.isActive ? 'text-orange-500 hover:bg-orange-50' : 'text-green-500 hover:bg-green-50'}`}>
                           {u.isActive ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
                         </button>
+                        <button 
+                          onClick={() => handleResetPassword(u.email)} 
+                          className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition"
+                          title="إرسال رابط استعادة كلمة السر"
+                        >
+                          <Lock className="w-4 h-4" />
+                        </button>
                         <button onClick={() => handleEdit(u)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 className="w-4 h-4" /></button>
                         <button onClick={() => handleDelete(u.email)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                       </div>
@@ -316,9 +336,16 @@ const UserManager: React.FC = () => {
                      {u.isActive ? 'نشط' : 'معطل'}
                    </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   <button onClick={() => toggleActive(u)} className={`flex items-center justify-center p-3 rounded-xl transition ${u.isActive ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'}`}>
                     {u.isActive ? <PowerOff className="w-5 h-5" /> : <Power className="w-5 h-5" />}
+                  </button>
+                  <button 
+                    onClick={() => handleResetPassword(u.email)} 
+                    className="flex items-center justify-center p-3 bg-amber-50 text-amber-600 rounded-xl"
+                    title="استعادة كلمة السر"
+                  >
+                    <Lock className="w-5 h-5" />
                   </button>
                   <button onClick={() => handleEdit(u)} className="flex items-center justify-center p-3 bg-blue-50 text-blue-600 rounded-xl"><Edit2 className="w-5 h-5" /></button>
                   <button onClick={() => handleDelete(u.email)} className="flex items-center justify-center p-3 bg-red-50 text-red-600 rounded-xl"><Trash2 className="w-5 h-5" /></button>
