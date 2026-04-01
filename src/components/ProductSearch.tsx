@@ -24,17 +24,7 @@ export default function ProductSearch() {
       }
 
       if (data) {
-        setProduct({ 
-          id: data.id, 
-          code: data.code,
-          name: data.name,
-          price_sell_before: data.price_sell_before,
-          price_sell_after: data.price_sell_after,
-          stock_quantity: data.stock_quantity,
-          min_stock_level: data.min_stock_level,
-          category: data.category,
-          is_active: data.is_active
-        });
+        setProduct(data as Product);
       } else {
         setProduct(null);
       }
@@ -46,74 +36,100 @@ export default function ProductSearch() {
   };
 
   return (
-    <div className="max-w-md mx-auto p-4 space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-          <Search className="w-6 h-6 text-blue-600" />
-          البحث برقم الكود
+    <div className="max-w-md mx-auto p-4 space-y-6 pt-10" dir="rtl">
+      <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-2 h-full bg-blue-500"></div>
+        <h2 className="text-2xl font-black text-slate-800 mb-6 flex items-center gap-3">
+          <Search className="w-8 h-8 text-blue-600" />
+          البحث الذكي بالموديل
         </h2>
-        <form onSubmit={handleSearch} className="flex gap-2">
-          <input
-            type="text"
-            value={searchCode}
-            onChange={(e) => setSearchCode(e.target.value)}
-            placeholder="أدخل كود السجادة (مثال: A-123)"
-            className="flex-1 p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-          />
+        <form onSubmit={handleSearch} className="space-y-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchCode}
+              onChange={(e) => setSearchCode(e.target.value)}
+              placeholder="أدخل كود السجادة (مثال: A-123)"
+              className="w-full p-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-100 outline-none font-bold text-lg transition-all"
+            />
+          </div>
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition disabled:opacity-70"
+            className="w-full bg-slate-900 text-white p-5 rounded-2xl font-black text-lg hover:bg-slate-800 transition disabled:opacity-70 shadow-xl shadow-slate-900/20 active:scale-95 flex items-center justify-center gap-3"
           >
-            {loading ? 'جاري...' : 'بحث'}
+            {loading ? (
+              <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <Search className="w-6 h-6" /> ابحث الآن
+              </>
+            )}
           </button>
         </form>
       </div>
 
       {searched && !loading && (
         product ? (
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="space-y-3">
+          <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 relative group">
+            <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
+            <div className="space-y-8">
               <div className="flex justify-between items-start">
-                <h3 className="text-2xl font-bold text-slate-800">{product.name}</h3>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${product.stock_quantity > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {product.stock_quantity > 0 ? 'متوفر' : 'غير متوفر'}
+                <div>
+                  <h3 className="text-3xl font-black text-slate-800 mb-1">{product.name}</h3>
+                  <p className="text-slate-400 font-bold tracking-widest uppercase text-xs">{product.code}</p>
+                </div>
+                <span className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest ${product.stock_quantity > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                  {product.stock_quantity > 0 ? 'متوفر بالمخزن' : 'غير متوفر حالياً'}
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                <div>
-                  <div className="text-sm text-slate-500">كود الموديل</div>
-                  <div className="font-bold text-lg text-slate-800">{product.code}</div>
+              
+              <div className="grid grid-cols-2 gap-8 pt-8 border-t border-slate-100">
+                <div className="space-y-1">
+                  <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">الموقع / التصنيف</div>
+                  <div className="font-black text-lg text-slate-800">{product.category || 'غير مصنف'}</div>
                 </div>
-                <div>
-                  <div className="text-sm text-slate-500">السعر الأساسي</div>
-                  <div className="font-bold text-lg text-blue-600">{product.price_sell_before} ج.م</div>
+                <div className="space-y-1">
+                  <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">السعر الأساسي</div>
+                  <div className="font-black text-2xl text-slate-800 tracking-tighter">{product.price_sell_before} <small className="text-xs">ج.م</small></div>
                 </div>
+
                 {product.price_sell_after && product.price_sell_after < product.price_sell_before && (
-                  <div className="col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100 flex justify-between items-center">
-                    <span className="text-sm font-medium text-blue-800">السعر بعد الخصم:</span>
-                    <span className="text-lg font-bold text-blue-600">
-                      {product.price_sell_after} ج.م
-                    </span>
+                  <div className="col-span-2 bg-blue-600 p-6 rounded-[2rem] shadow-xl shadow-blue-600/20 flex justify-between items-center text-white">
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                         <TrendingUp className="w-6 h-6 text-white" />
+                       </div>
+                       <span className="text-sm font-black uppercase tracking-widest leading-none">عرض خاص حالياً</span>
+                    </div>
+                    <div className="text-right">
+                       <span className="block text-[10px] font-bold opacity-60 line-through mb-1">{product.price_sell_before} ج.م</span>
+                       <span className="text-3xl font-black tracking-tighter">
+                         {product.price_sell_after} <small className="text-xs">ج.م</small>
+                       </span>
+                    </div>
                   </div>
                 )}
-                {product.category && (
-                  <div className="col-span-2">
-                    <div className="text-sm text-slate-500">التصنيف</div>
-                    <div className="font-medium text-slate-800">{product.category}</div>
-                  </div>
-                )}
+                
+                <div className="col-span-2 flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                   <Package className="w-5 h-5 text-slate-400" />
+                   <p className="text-xs font-bold text-slate-500">الكمية المتاحة حالياً في فرعك هي <b className="text-slate-800">{product.stock_quantity}</b> قطعة.</p>
+                </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100 text-center">
-            <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-700 mb-1">لم يتم العثور على المنتج</h3>
-            <p className="text-slate-500">تأكد من كتابة الكود بشكل صحيح وحاول مرة أخرى.</p>
+          <div className="bg-white p-12 rounded-[3rem] shadow-xl border border-slate-100 text-center animate-in zoom-in-95 duration-300">
+            <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Package className="w-12 h-12 text-slate-300" />
+            </div>
+            <h3 className="text-xl font-black text-slate-800 mb-1">لم يتم العثور على الموديل</h3>
+            <p className="text-slate-500 font-medium">نعتذر، لم نجد أي سجادة مسجلة بهذا الكود. تأكد من صحة الكود وحاول مرة أخرى.</p>
           </div>
         )
       )}
     </div>
   );
 }
+
+import { TrendingUp } from 'lucide-react';
