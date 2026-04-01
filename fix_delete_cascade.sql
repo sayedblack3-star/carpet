@@ -22,3 +22,23 @@ ALTER TABLE "public"."audit_logs" ADD CONSTRAINT "audit_logs_user_id_fkey"
 
 -- 3. Also ensure that deleting from auth.users (if it exists) doesn't break public.users
 -- This is handled by the trigger or by keeping public.users independent as seen in fix_users_table.sql
+
+-- 4. Ensure RLS policies allow deletion
+-- Some databases have RLS enabled which prevents deletion even if the query returns success (0 rows affected)
+ALTER TABLE "public"."users" ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all users to delete from users" ON "public"."users";
+CREATE POLICY "Allow all users to delete from users" ON "public"."users"
+    FOR DELETE USING (true); -- Note: In production you should limit this to admin users only
+
+DROP POLICY IF EXISTS "Allow all users to read users" ON "public"."users";
+CREATE POLICY "Allow all users to read users" ON "public"."users"
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow all users to insert users" ON "public"."users";
+CREATE POLICY "Allow all users to insert users" ON "public"."users"
+    FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow all users to update users" ON "public"."users";
+CREATE POLICY "Allow all users to update users" ON "public"."users"
+    FOR UPDATE USING (true);

@@ -131,8 +131,19 @@ const UserManager: React.FC = () => {
     
     if (window.confirm('هل أنت متأكد من حذف هذا المستخدم نهائياً؟')) {
       try {
-        const { error } = await supabase.from('users').delete().eq('email', email);
+        console.log("Deleting user with email:", email);
+        const { error, count } = await supabase
+          .from('users')
+          .delete({ count: 'exact' })
+          .ilike('email', email.trim());
+        
         if (error) throw error;
+        
+        if (count === 0) {
+          toast.error('لم يتم العثور على الحساب، ربما تم حذفه بالفعل أو هناك خطأ في البيانات.');
+          return;
+        }
+
         await logAction('حذف مستخدم', `تم حذف المستخدم: ${email}`);
         toast.success('تم حذف المستخدم بنجاح');
       } catch (error: any) {
