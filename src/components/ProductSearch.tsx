@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { Product } from '../types';
-import { Search, Package } from 'lucide-react';
+import { Search, Package, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProductSearch() {
@@ -131,5 +131,3 @@ export default function ProductSearch() {
     </div>
   );
 }
-
-import { TrendingUp } from 'lucide-react';

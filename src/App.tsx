@@ -112,9 +112,6 @@ const App: React.FC = () => {
     );
   }
 
-  const role = profile?.role || 'seller';
-
-  // Navigation Logic (Task 2)
   const tabs = [
     { id: 'dashboard', label: 'الإحصائيات', icon: BarChart3, roles: ['owner', 'branch_manager'] },
     { id: 'pos', label: 'نظام البيع', icon: ShoppingCart, roles: ['owner', 'branch_manager', 'seller'] },
@@ -125,14 +122,16 @@ const App: React.FC = () => {
     { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['owner', 'branch_manager'] },
   ];
 
-  const allowedTabs = tabs.filter(tab => tab.roles.includes(role));
+  const role = profile?.role || 'seller';
+  const allowedTabs = tabs.filter(tab => tab.roles.includes(role as any));
 
-  const renderContent = () => {
-    // Direct Access Prevention
-    if (!allowedTabs.find(t => t.id === activeTab)) {
+  useEffect(() => {
+    if (profile && !allowedTabs.find(t => t.id === activeTab)) {
       setActiveTab(allowedTabs[0]?.id || 'pos');
     }
+  }, [profile, activeTab, allowedTabs]);
 
+  const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <DashboardView userBranchId={profile?.branch_id} />;
       case 'pos': return <SalespersonView />;
