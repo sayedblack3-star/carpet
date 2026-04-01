@@ -56,10 +56,39 @@ const App: React.FC = () => {
         if (data.role === 'seller') setActiveTab('pos');
         else if (data.role === 'cashier') setActiveTab('cashier');
         else if (data.role === 'price_manager') setActiveTab('inventory');
+        else setActiveTab('dashboard');
+      } else if (session?.user?.email === 'sayed@carpetland.com') {
+        // Master Admin Bypass: Synthesis an admin profile in memory if DB fails
+        console.log('Master Admin Bypass Activated');
+        setProfile({
+          id: userId,
+          email: session.user.email,
+          full_name: 'Sayed Admin (Master Bypass)',
+          role: 'admin',
+          is_approved: true,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          branch_id: null
+        });
+        setActiveTab('dashboard');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
-      toast.error('خطأ في تحميل بيانات الملف الشخصي');
+      // Fallback for Master Admin even on network error
+      if (session?.user?.email === 'sayed@carpetland.com') {
+        setProfile({
+          id: userId,
+          email: session.user.email,
+          full_name: 'Sayed Admin (Network Fallback)',
+          role: 'admin',
+          is_approved: true,
+          is_active: true,
+          created_at: new Date().toISOString(),
+          branch_id: null
+        });
+      } else {
+        toast.error('خطأ في تحميل بيانات الملف الشخصي');
+      }
     } finally {
       setLoading(false);
     }
