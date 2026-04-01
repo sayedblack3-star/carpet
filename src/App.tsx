@@ -42,7 +42,10 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [userBranchId, setUserBranchId] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'main' | 'shortages'>('main');
-  const [showOwnerWelcome, setShowOwnerWelcome] = useState(false);
+  const [showOwnerWelcome, setShowOwnerWelcome] = useState<boolean>(() => {
+    // Show splash on every new browser session
+    return !sessionStorage.getItem('splashSeen');
+  });
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);
@@ -91,11 +94,6 @@ function App() {
           setIsAdmin(true);
           setUnauthorized(false);
           setUserBranchId(userData ? userData.branch_id : null);
-          // Show welcome splash only once per session for the owner
-          const hasSeenWelcome = sessionStorage.getItem('ownerWelcomeSeen');
-          if (!hasSeenWelcome) {
-            setShowOwnerWelcome(true);
-          }
           const savedRole = localStorage.getItem('appRole') as UserRole;
           if (savedRole) {
             setRole(savedRole);
@@ -185,9 +183,13 @@ function App() {
   };
 
   const handleOwnerWelcomeDismiss = () => {
-    sessionStorage.setItem('ownerWelcomeSeen', 'true');
+    sessionStorage.setItem('splashSeen', 'true');
     setShowOwnerWelcome(false);
   };
+
+  if (showOwnerWelcome) {
+    return <OwnerWelcome onDismiss={handleOwnerWelcomeDismiss} />;
+  }
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50/90 pharaonic-bg">جاري التحميل...</div>;
@@ -344,7 +346,6 @@ function App() {
 
   return (
     <div className="min-h-screen font-sans bg-slate-50/90 pharaonic-bg" dir="rtl">
-      {showOwnerWelcome && <OwnerWelcome onDismiss={handleOwnerWelcomeDismiss} />}
       <Toaster position="top-center" richColors />
       
       <header className="bg-white/95 backdrop-blur-md border-b border-amber-100 h-16 flex items-center justify-between px-4 sticky top-0 z-10 shadow-sm">
