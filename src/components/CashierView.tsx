@@ -82,7 +82,7 @@ const CashierView: React.FC = () => {
   };
 
   const markAsConfirmed = async (order: Order) => {
-    const isManagement = currentProfile?.role === 'owner' || currentProfile?.role === 'admin';
+    const isManagement = currentProfile?.role === 'admin';
     if (!activeShift && !isManagement) {
        toast.error('يجب عليك بـدء وردية عمل أولاً قبل تحصيل الأموال');
        return;

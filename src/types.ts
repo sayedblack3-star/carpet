@@ -6,7 +6,7 @@ export interface Branch {
   created_at: string;
 }
 
-export type UserRole = 'owner' | 'admin' | 'branch_manager' | 'seller' | 'cashier' | 'price_manager';
+export type UserRole = 'admin' | 'branch_manager' | 'seller' | 'cashier' | 'price_manager';
 export type OrderStatus = 'draft' | 'sent_to_cashier' | 'under_review' | 'confirmed' | 'cancelled';
 
 export interface Profile {

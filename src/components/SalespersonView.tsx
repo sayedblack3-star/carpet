@@ -74,7 +74,7 @@ const SalespersonView: React.FC = () => {
   };
 
   const addToCart = (product: Product) => {
-    const isManagement = currentProfile?.role === 'owner' || currentProfile?.role === 'admin';
+    const isManagement = currentProfile?.role === 'admin';
     if (!activeShift && !isManagement) {
        toast.error('يجب عليك بـدء وردية عمل أولاً قبل تحصيل الأموال');
        return;
@@ -191,8 +191,8 @@ const SalespersonView: React.FC = () => {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price_sell_after || item.price_sell_before) * item.cartQuantity, 0);
 
-  // Task 6: Block if no active shift (Bypass for Owner/Admin)
-  const isManagement = currentProfile?.role === 'owner' || currentProfile?.role === 'admin';
+  // Task 6: Block if no active shift (Bypass for Admin)
+  const isManagement = currentProfile?.role === 'admin';
   if (!activeShift && !loadingShift && !isManagement) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 pharaonic-bg p-4" dir="rtl">
