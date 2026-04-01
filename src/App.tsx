@@ -40,8 +40,9 @@ const Logo = () => (
 );
 
 function App() {
-  const [user, setUser] = useState<any>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [activeRole, setActiveRole] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<'main' | 'shortages'>('main');
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -54,19 +55,22 @@ function App() {
     }
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      setSession(session);
       if (session?.user) {
-        setRole(session.user.user_metadata?.role || 'salesperson');
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+      setSession(session);
       if (session?.user) {
-        setRole(session.user.user_metadata?.role || 'salesperson');
+        fetchProfile(session.user.id);
       } else {
-        setRole(null);
+        setProfile(null);
+        setActiveRole(null);
+        setLoading(false);
       }
     });
 
@@ -82,9 +86,38 @@ function App() {
     };
   }, []);
 
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (data) {
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error('Error fetching profile:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSplashFinish = () => {
     setShowSplash(false);
     sessionStorage.setItem('splashSeen', 'true');
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem('branchId');
+    localStorage.removeItem('salespersonName');
+  };
+
+  const selectRole = (role: string) => {
+    setActiveRole(role);
+    setCurrentTab('main');
   };
 
   if (showSplash) {
@@ -93,33 +126,45 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600"></div>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
-  if (!user) {
+  if (!session) {
     return <Login />;
   }
 
-  const isAdmin = user.user_metadata?.role === 'admin' || 
-                  user.email === 'sayedblack3@gmail.com' || 
-                  user.email === 'admin@carpetland.com';
-  const userBranchId = user.user_metadata?.branch_id;
+  const isMasterAdmin = session.user.email === 'sayedblack3@gmail.com' || session.user.email === 'admin@carpetland.com';
+  const roleFromProfile = profile?.role || 'salesperson';
+  const isApproved = profile?.is_approved || isMasterAdmin;
+  const isAdminUser = roleFromProfile === 'admin' || roleFromProfile === 'manager' || isMasterAdmin;
+  const userBranchId = profile?.branch_id;
+  const userName = profile?.full_name || session.user.email;
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('branchId');
-    localStorage.removeItem('salespersonName');
-  };
+  if (!isApproved) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
+        <div className="bg-white/10 backdrop-blur-xl p-10 rounded-[2rem] border border-white/5 max-w-md w-full shadow-2xl">
+          <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+            <Shield className="w-10 h-10 animate-pulse" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-2">حسابك في انتظار المراجعة</h1>
+          <p className="text-slate-400 mb-8 leading-relaxed">
+            مرحباً بك في Carpet Land. حسابك قيد المراجعة حالياً من قبل الإدارة. يرجى التواصل مع المسؤول لتفعيل حسابك.
+          </p>
+          <button onClick={handleLogout} className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl transition border border-white/10">
+            تسجيل الخروج
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const selectRole = (newRole: string) => {
-    setRole(newRole);
-    setCurrentTab('main');
-  };
+  const effectiveRole = isAdminUser ? (activeRole || roleFromProfile) : roleFromProfile;
 
-  if (isAdmin && !role) {
+  if (isAdminUser && !activeRole) {
     return (
       <div className="min-h-screen pharaonic-bg p-4 sm:p-8" dir="rtl">
         <Toaster position="top-center" richColors />
@@ -181,7 +226,7 @@ function App() {
               <p className="text-sm sm:text-base text-slate-500">إنشاء ومتابعة طلبات المبيعات</p>
             </button>
           </div>
- 
+  
           <div className="mt-12">
             <button 
               onClick={handleLogout} 
@@ -229,10 +274,10 @@ function App() {
               <ClipboardList className="w-4 h-4" /> <span className="hidden xs:inline">النواقص</span>
             </button>
           </div>
- 
-          {isAdmin && (
+
+          {isAdminUser && (
             <button 
-              onClick={() => { setRole(null); setCurrentTab('main'); }}
+              onClick={() => { setActiveRole(null); setCurrentTab('main'); }}
               className="flex items-center gap-1 text-[10px] sm:text-sm bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg font-bold border border-amber-200 whitespace-nowrap"
             >
               <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
@@ -249,18 +294,18 @@ function App() {
           </button>
         </div>
       </header>
- 
+
       <main className="h-[calc(100vh-64px)] overflow-y-auto">
         {currentTab === 'shortages' ? (
-          <ShortagesView userBranchId={userBranchId} userName={user.user_metadata?.full_name || user.email} />
+          <ShortagesView userBranchId={userBranchId} userName={userName} />
         ) : (
           <div className="h-full">
-            {role === 'salesperson' && <SalespersonView userBranchId={userBranchId} />}
-            {role === 'cashier' && <CashierView userBranchId={userBranchId} userRole={user.user_metadata?.role} />}
-            {role === 'manager' && <DashboardView userBranchId={userBranchId} />}
-            {role === 'pricing' && <ProductManager />}
-            {role === 'admin' && <UserManager />}
-            {role === 'audit' && <AuditLogsView />}
+            {effectiveRole === 'salesperson' && <SalespersonView userBranchId={userBranchId} />}
+            {effectiveRole === 'cashier' && <CashierView userBranchId={userBranchId} userRole={roleFromProfile} />}
+            {effectiveRole === 'manager' && <DashboardView userBranchId={userBranchId} />}
+            {effectiveRole === 'pricing' && <ProductManager />}
+            {effectiveRole === 'admin' && <UserManager />}
+            {effectiveRole === 'audit' && <AuditLogsView />}
           </div>
         )}
       </main>

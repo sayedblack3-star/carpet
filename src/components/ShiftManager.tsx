@@ -1,219 +1,177 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { AppUser, Shift, BRANCHES } from '../types';
-import { Clock, Play, Square, DollarSign } from 'lucide-react';
+import { Clock, Play, Square, DollarSign, Wallet, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 import { format } from 'date-fns';
 
 interface ShiftManagerProps {
-  userRole: string;
-  userBranchId: string | null;
-  userName: string;
+  userId: string;
+  branchId: string;
 }
 
-export default function ShiftManager({ userRole, userBranchId, userName }: ShiftManagerProps) {
-  const [activeShift, setActiveShift] = useState<Shift | null>(null);
+export default function ShiftManager({ userId, branchId }: ShiftManagerProps) {
+  const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [startingCash, setStartingCash] = useState('');
   const [endingCash, setEndingCash] = useState('');
-  const [notes, setNotes] = useState('');
+  const [showShiftModal, setShowShiftModal] = useState(false);
+
+  const fetchActiveShift = async () => {
+    if (!userId) return;
+    const { data } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    setActiveShift(data);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    let channel: any = null;
+    fetchActiveShift();
+    const channel = supabase.channel('shifts-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `user_id=eq.${userId}` }, () => fetchActiveShift())
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
 
-    const setupShift = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) return;
-
-      const fetchShift = async () => {
-        const { data, error } = await supabase
-          .from('shifts')
-          .select('*')
-          .eq('user_id', user.id)
-          .eq('status', 'active')
-          .limit(1);
-
-        if (data && data.length > 0) {
-          const shiftDoc = data[0];
-          setActiveShift({
-            id: shiftDoc.id,
-            userId: shiftDoc.user_id,
-            userEmail: shiftDoc.user_email,
-            userName: shiftDoc.user_name,
-            branchId: shiftDoc.branch_id,
-            role: shiftDoc.role,
-            startTime: new Date(shiftDoc.start_time),
-            status: shiftDoc.status,
-            startingCash: shiftDoc.starting_cash
-          } as any);
-        } else {
-          setActiveShift(null);
-        }
-        setLoading(false);
-      };
-
-      await fetchShift();
-
-      channel = supabase.channel('shift-changes')
-        .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'shifts',
-            filter: `user_id=eq.${user.id}`
-        }, (payload) => {
-            fetchShift();
-        })
-        .subscribe();
-    };
-
-    setupShift();
-
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, []);
-
-  const handleStartShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { data: { session } } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user || !userBranchId) {
-      toast.error('يجب تحديد الفرع أولاً لبدء الوردية');
-      return;
+  const handleStartShift = async () => {
+    if (!branchId) {
+       toast.error('يرجى اختيار الفرع قبل بدء الوردية');
+       return;
+    }
+    const cash = parseFloat(startingCash);
+    if (isNaN(cash)) {
+       toast.error('يرجى إدخال مبلغ عهدة البداية');
+       return;
     }
 
     try {
       const { error } = await supabase.from('shifts').insert([{
-        user_id: user.id,
-        user_email: user.email,
-        user_name: userName || user.user_metadata?.full_name || 'مستخدم',
-        branch_id: userBranchId,
-        role: userRole,
+        user_id: userId,
+        branch_id: branchId,
         status: 'active',
-        starting_cash: startingCash ? parseFloat(startingCash) : 0,
+        starting_cash: cash,
+        start_time: new Date().toISOString()
       }]);
-      
+
       if (error) throw error;
-      
-      await logAction('بدء وردية', `بدء وردية جديدة بعهدة ${startingCash || 0} ج.م`, userBranchId);
-      toast.success('تم بدء الوردية بنجاح');
+      toast.success('تم فتح الوردية بنجاح 🟢');
+      setShowShiftModal(false);
       setStartingCash('');
-    } catch (error) {
-      console.error('Error starting shift:', error);
-      toast.error('حدث خطأ أثناء بدء الوردية');
+    } catch (error: any) {
+      toast.error('خطأ: ' + error.message);
     }
   };
 
-  const handleEndShift = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeShift?.id) return;
+  const handleEndShift = async () => {
+    const cash = parseFloat(endingCash);
+    if (isNaN(cash)) {
+       toast.error('يرجى إدخال مبلغ عهدة النهاية');
+       return;
+    }
 
     try {
-      const { error } = await supabase.from('shifts')
-        .update({
-          end_time: new Date().toISOString(),
-          status: 'completed',
-          ending_cash: endingCash ? parseFloat(endingCash) : 0,
-          notes: notes
-        })
-        .eq('id', activeShift.id);
+      const { error } = await supabase.from('shifts').update({
+        status: 'closed',
+        ending_cash: cash,
+        end_time: new Date().toISOString()
+      }).eq('id', activeShift.id);
 
       if (error) throw error;
-
-      await logAction('إنهاء وردية', `إنهاء الوردية بعهدة ${endingCash || 0} ج.م`, activeShift.branchId);
-      toast.success('تم إنهاء الوردية بنجاح');
+      toast.error('تم إغلاق الوردية 🔴');
+      setShowShiftModal(false);
       setEndingCash('');
-      setNotes('');
-      setActiveShift(null);
-    } catch (error) {
-      console.error('Error ending shift:', error);
-      toast.error('حدث خطأ أثناء إنهاء الوردية');
+    } catch (error: any) {
+      toast.error('خطأ: ' + error.message);
     }
   };
 
   if (loading) return null;
 
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className={`p-3 rounded-xl ${activeShift ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-600'}`}>
-          <Clock className="w-6 h-6" />
-        </div>
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">إدارة الوردية</h2>
-          <p className="text-sm text-slate-500">
-            {activeShift ? 'وردية نشطة حالياً' : 'لا توجد وردية نشطة'}
-          </p>
-        </div>
-      </div>
+    <>
+      <button 
+        onClick={() => setShowShiftModal(true)}
+        className={`fixed bottom-4 left-4 p-4 rounded-full shadow-2xl transition-all z-[100] flex items-center gap-2 font-black ${
+          activeShift ? 'bg-emerald-600 text-white animate-pulse shadow-emerald-200' : 'bg-slate-900 text-white shadow-slate-200'
+        }`}
+      >
+        <Clock className="w-6 h-6" />
+        <span className="text-sm">{activeShift ? 'وردية مفتوحة' : 'فتح وردية'}</span>
+      </button>
 
-      {!activeShift ? (
-        <form onSubmit={handleStartShift} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">العهدة الافتتاحية (اختياري)</label>
-            <div className="relative">
-              <DollarSign className="absolute right-3 top-2.5 w-5 h-5 text-slate-400" />
-              <input
-                type="number"
-                value={startingCash}
-                onChange={(e) => setStartingCash(e.target.value)}
-                className="w-full pl-3 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-              />
-            </div>
-          </div>
-          <button
-            type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition"
-          >
-            <Play className="w-5 h-5" />
-            تسجيل حضور وبدء الوردية
-          </button>
-        </form>
-      ) : (
-        <form onSubmit={handleEndShift} className="space-y-4">
-          <div className="bg-slate-50 p-4 rounded-lg mb-4">
-            <p className="text-sm text-slate-600 mb-1">وقت البدء:</p>
-            <p className="font-medium">
-              {activeShift.startTime ? format(activeShift.startTime, 'yyyy-MM-dd hh:mm a') : 'جاري التحميل...'}
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">العهدة الختامية (اختياري)</label>
-            <div className="relative">
-              <DollarSign className="absolute right-3 top-2.5 w-5 h-5 text-slate-400" />
-              <input
-                type="number"
-                value={endingCash}
-                onChange={(e) => setEndingCash(e.target.value)}
-                className="w-full pl-3 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">ملاحظات (اختياري)</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-              rows={2}
-              placeholder="أي ملاحظات إضافية..."
-            />
-          </div>
-          <button
-            type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-red-600 text-white font-bold py-3 rounded-xl hover:bg-red-700 transition"
-          >
-            <Square className="w-5 h-5" />
-            تسجيل انصراف وإنهاء الوردية
-          </button>
-        </form>
+      {showShiftModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[2.5rem] shadow-2xl max-w-md w-full p-8 border border-white/20 animate-in zoom-in-95 duration-200">
+             <div className="flex justify-between items-start mb-8">
+               <div>
+                 <h2 className="text-2xl font-black text-slate-800">إدارة الوردية</h2>
+                 <p className="text-slate-500 font-medium mt-1">تتبع الوقت والعهد المالية</p>
+               </div>
+               <button onClick={() => setShowShiftModal(false)} className="p-2 hover:bg-slate-50 rounded-full text-slate-300">
+                 <Square className="w-5 h-5" />
+               </button>
+             </div>
+
+             {activeShift ? (
+               <div className="space-y-6">
+                 <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 flex items-center gap-4">
+                   <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center">
+                     <Play className="w-6 h-6" />
+                   </div>
+                   <div>
+                     <p className="text-emerald-700 font-bold">الوردية مفتوحة منذ</p>
+                     <p className="text-sm text-emerald-600 font-black">{format(new Date(activeShift.start_time), 'HH:mm - yyyy/MM/dd')}</p>
+                   </div>
+                 </div>
+
+                 <div className="space-y-4">
+                    <label className="text-sm font-bold text-slate-700 mr-2 flex items-center gap-1">
+                      <DollarSign className="w-4 h-4" /> عهدة نهاية الوردية (كاش)
+                    </label>
+                    <input type="number" value={endingCash} onChange={e => setEndingCash(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 font-black text-xl text-center" placeholder="0.00" />
+                 </div>
+
+                 <button onClick={handleEndShift} className="w-full bg-red-600 hover:bg-red-700 text-white font-black py-5 rounded-[1.8rem] text-lg shadow-xl shadow-red-100 transition-all flex items-center justify-center gap-3">
+                   <Square className="w-6 h-6" /> إغلاق الوردية وحفظ
+                 </button>
+               </div>
+             ) : (
+               <div className="space-y-6">
+                 <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
+                   <div className="w-12 h-12 bg-white text-slate-400 rounded-2xl flex items-center justify-center border border-slate-100">
+                     <Wallet className="w-6 h-6" />
+                   </div>
+                   <div>
+                     <p className="text-slate-500 font-bold">الوردية الحالية: مغلقة</p>
+                     <p className="text-xs text-slate-400 font-medium">يرجى تسجيل العهدة البدائية للبدء</p>
+                   </div>
+                 </div>
+
+                 <div className="space-y-4">
+                    <label className="text-sm font-bold text-slate-700 mr-2 flex items-center gap-1">
+                      <DollarSign className="w-4 h-4" /> عهدة استلام الوردية (كاش)
+                    </label>
+                    <input type="number" value={startingCash} onChange={e => setStartingCash(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 font-black text-xl text-center" placeholder="0.00" />
+                 </div>
+
+                 <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex items-start gap-3">
+                   <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                   <p className="text-xs text-amber-800 font-medium leading-relaxed">يرجى التأكد من اختيار الفرع الصحيح في الواجهة الرئيسية قبل البدء.</p>
+                 </div>
+
+                 <button onClick={handleStartShift} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-5 rounded-[1.8rem] text-lg shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-3">
+                   <Play className="w-6 h-6" /> بدء الوردية الآن
+                 </button>
+               </div>
+             )}
+           </div>
+        </div>
       )}
-    </div>
+    </>
   );
 }

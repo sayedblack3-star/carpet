@@ -1,332 +1,224 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Product } from '../types';
-import { Plus, Trash2, Package, Search, CheckCircle, XCircle, Edit, X } from 'lucide-react';
+import { Plus, Trash2, Package, Search, CheckCircle, XCircle, Edit, X, TrendingUp, DollarSign, Layers, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 
 export default function ProductManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [price, setPrice] = useState('');
-  const [discountPercentage, setDiscountPercentage] = useState('');
-  const [size, setSize] = useState('');
-  const [inStock, setInStock] = useState(true);
-  const [quantity, setQuantity] = useState('');
+  const [loading, setLoading] = useState(true);
+  
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const [formData, setFormData] = useState<Partial<Product>>({
+    code: '',
+    name: '',
+    description: '',
+    price_buy: 0,
+    price_sell_before: 0,
+    price_sell_after: 0,
+    stock_quantity: 0,
+    min_stock_level: 5,
+    category: '',
+    is_active: true
+  });
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (data) setProducts(data as Product[]);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchProducts = async () => {
-      const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-      if (data) {
-        setProducts(data.map((d: any) => ({
-          id: d.id,
-          code: d.code,
-          name: d.name,
-          price_before: d.price_before,
-          price_after: d.price_after,
-          price: d.price_before, // mapping for legacy usage
-          discountPercentage: d.discount_percentage,
-          size: d.size,
-          inStock: d.in_stock,
-          quantity: d.quantity,
-          isDeleted: d.is_deleted
-        })));
-      }
-    };
-    
     fetchProducts();
-
-    const channel = supabase.channel('products-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, payload => {
-        fetchProducts();
-      })
+    const channel = supabase.channel('products-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => fetchProducts())
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const handleAddProduct = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       if (isEditing && editingId) {
-        const { error } = await supabase.from('products').update({
-          code,
-          name,
-          price_before: parseFloat(price),
-          discount_percentage: discountPercentage ? parseFloat(discountPercentage) : 0,
-          size,
-          in_stock: inStock,
-          quantity: quantity ? parseInt(quantity) : 0,
-          updated_at: new Date().toISOString()
-        }).eq('id', editingId);
-        
+        const { error } = await supabase.from('products').update(formData).eq('id', editingId);
         if (error) throw error;
-
-        await logAction('تعديل منتج', `تم تعديل المنتج: ${name} (${code})`);
-        toast.success('تم تحديث المنتج بنجاح');
-        setIsEditing(false);
-        setEditingId(null);
+        toast.success('تم تحديث بيانات المنتج بنجاح');
       } else {
-        const { error } = await supabase.from('products').insert([{
-          code,
-          name,
-          price_before: parseFloat(price),
-          discount_percentage: discountPercentage ? parseFloat(discountPercentage) : 0,
-          size,
-          in_stock: inStock,
-          quantity: quantity ? parseInt(quantity) : 0,
-          is_deleted: false
-        }]);
-
+        const { error } = await supabase.from('products').insert([formData]);
         if (error) throw error;
-
-        await logAction('إضافة منتج', `تم إضافة منتج جديد: ${name} (${code})`);
-        toast.success('تم إضافة المنتج بنجاح');
+        toast.success('تم إضافة المنتج الجديد للمخزن');
       }
-      setCode(''); setName(''); setPrice(''); setDiscountPercentage(''); setSize(''); setQuantity(''); setInStock(true);
+      resetForm();
+      fetchProducts();
     } catch (error: any) {
-      toast.error(error.message || 'حدث خطأ أثناء حفظ المنتج');
+      toast.error('حدث خطأ: ' + error.message);
     }
   };
 
-  const handleEdit = (product: Product) => {
-    setIsEditing(true);
-    setEditingId(product.id!);
-    setCode(product.code || '');
-    setName(product.name || '');
-    setPrice(product.price?.toString() || product.price_before?.toString() || '');
-    setDiscountPercentage(product.discountPercentage?.toString() || '');
-    setSize(product.size || '');
-    setQuantity(product.quantity?.toString() || '0');
-    setInStock(product.inStock !== false);
-    document.getElementById('product-form')?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  const cancelEdit = () => {
+  const resetForm = () => {
     setIsEditing(false);
     setEditingId(null);
-    setCode(''); setName(''); setPrice(''); setDiscountPercentage(''); setSize(''); setQuantity(''); setInStock(true);
+    setFormData({ code: '', name: '', price_buy: 0, price_sell_before: 0, stock_quantity: 0, min_stock_level: 5, is_active: true });
   };
 
-  const handleDelete = async (id: string) => {
-    if(window.confirm('هل أنت متأكد من أرشفة/حذف هذا المنتج؟')) {
-      try {
-        const { error } = await supabase.from('products').update({ is_deleted: true }).eq('id', id);
-        if (error) throw error;
-        await logAction('أرشفة منتج', `تم أرشفة المنتج رقم ${id}`);
-        toast.success('تم أرشفة المنتج بنجاح');
-      } catch (error) {
-        toast.error('حدث خطأ أثناء أرشفة المنتج');
-      }
-    }
-  };
-
-  const toggleStock = async (id: string, currentStatus: boolean) => {
-    try {
-      const { error } = await supabase.from('products').update({ in_stock: !currentStatus }).eq('id', id);
-      if (error) throw error;
-      await logAction('تغيير حالة المخزون', `تم تغيير حالة المخزون للمنتج رقم ${id} إلى ${!currentStatus ? 'متوفر' : 'غير متوفر'}`);
-      toast.success(currentStatus ? 'تم تغيير الحالة إلى غير متوفر' : 'تم تغيير الحالة إلى متوفر');
-    } catch (error) {
-      toast.error('حدث خطأ أثناء تحديث الحالة');
-    }
+  const deleteProduct = async (id: string) => {
+    if (!window.confirm('هل تريد أرشفة هذا المنتج؟ لن يظهر في لوحة البيع.')) return;
+    const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id);
+    if (!error) toast.info('تمت أرشفة المنتج');
   };
 
   const filteredProducts = products.filter(p => 
-    !p.isDeleted && (
-      (p.code || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (p.name || '').toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    p.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6" dir="rtl">
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Add/Edit Product Form */}
-        <div id="product-form" className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-fit lg:sticky lg:top-4 transition-all overflow-hidden relative">
-          {isEditing && <div className="absolute top-0 right-0 h-1 bg-orange-500 w-full animate-pulse" />}
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
-              {isEditing ? <Edit className="w-5 h-5 text-orange-600" /> : <Plus className="w-5 h-5 text-blue-600" />}
-              {isEditing ? 'تعديل المنتج' : 'إضافة منتج جديد'}
-            </h2>
-            {isEditing && (
-              <button type="button" onClick={cancelEdit} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition">
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-          <form onSubmit={handleAddProduct} className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">كود المنتج *</label>
-                <input required value={code} onChange={e=>setCode(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="مثال: A-123" />
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">اسم المنتج *</label>
-                <input required value={name} onChange={e=>setName(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="سجاد تركي مودرن" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">السعر الأساسي *</label>
-                  <input required type="number" value={price} onChange={e=>setPrice(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0.00" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">نسبة الخصم %</label>
-                  <input type="number" value={discountPercentage} onChange={e=>setDiscountPercentage(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">المقاس</label>
-                  <input value={size} onChange={e=>setSize(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="2x3" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">الكمية المتاحة</label>
-                  <input type="number" value={quantity} onChange={e=>setQuantity(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="0" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">حالة التوفر</label>
-                <select value={inStock ? 'true' : 'false'} onChange={e=>setInStock(e.target.value === 'true')} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition cursor-pointer">
-                  <option value="true">متوفر في المخزن</option>
-                  <option value="false">غير متوفر حالياً</option>
-                </select>
-              </div>
-            </div>
-            <button type="submit" className={`w-full text-white py-4 rounded-xl font-bold transition shadow-sm ${isEditing ? 'bg-orange-600 hover:bg-orange-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
-              {isEditing ? 'حفظ التعديلات' : 'إضافة المنتج للمخزن'}
-            </button>
-          </form>
+    <div className="p-4 sm:p-8 max-w-7xl mx-auto" dir="rtl">
+      <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
+             <Package className="w-8 h-8 text-orange-500" /> إدارة المخزون الاحترافي
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">نظام ERP لتسعير وجرد المنتجات</p>
+        </div>
+        
+        <div className="relative group">
+          <input 
+            type="text" 
+            placeholder="بحث بالكود أو الاسم..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full sm:w-80 px-12 py-3.5 rounded-2xl bg-white border border-slate-200 focus:ring-4 focus:ring-orange-100 outline-none font-bold shadow-sm"
+          />
+          <Search className="w-5 h-5 text-slate-300 absolute right-4 top-1/2 -translate-y-1/2 group-focus-within:text-orange-500 transition-colors" />
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="lg:col-span-4 bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] shadow-2xl border border-white sticky top-24">
+           <h2 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-2">
+             {isEditing ? <Edit className="w-6 h-6 text-orange-500" /> : <Plus className="w-6 h-6 text-orange-500" />}
+             {isEditing ? 'تعديل بيانات منتج' : 'إضافة منتج جديد'}
+           </h2>
+
+           <form onSubmit={handleSubmit} className="space-y-5">
+             <div className="grid grid-cols-2 gap-4">
+               <div>
+                 <label className="text-xs font-bold text-slate-400 mr-2 block mb-1">كود المنتج</label>
+                 <input required type="text" value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold" />
+               </div>
+               <div>
+                 <label className="text-xs font-bold text-slate-400 mr-2 block mb-1">التصنيف</label>
+                 <input type="text" value={formData.category || ''} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold" />
+               </div>
+             </div>
+
+             <div>
+               <label className="text-xs font-bold text-slate-400 mr-2 block mb-1">اسم المنتج</label>
+               <input required type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-100 font-bold" />
+             </div>
+
+             <div className="grid grid-cols-3 gap-3">
+               <div>
+                 <label className="text-[10px] font-bold text-slate-400 block mb-1">سعر الشراء</label>
+                 <input required type="number" value={formData.price_buy} onChange={e => setFormData({...formData, price_buy: parseFloat(e.target.value)})} className="w-full px-3 py-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-red-500" />
+               </div>
+               <div>
+                 <label className="text-[10px] font-bold text-slate-400 block mb-1">السعر الأصلي</label>
+                 <input required type="number" value={formData.price_sell_before} onChange={e => setFormData({...formData, price_sell_before: parseFloat(e.target.value)})} className="w-full px-3 py-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-slate-700" />
+               </div>
+               <div>
+                 <label className="text-[10px] font-bold text-slate-400 block mb-1">سعر البيع</label>
+                 <input type="number" value={formData.price_sell_after} onChange={e => setFormData({...formData, price_sell_after: parseFloat(e.target.value)})} className="w-full px-3 py-3 rounded-xl bg-slate-50 border border-slate-100 font-bold text-emerald-600" />
+               </div>
+             </div>
+
+             <div className="grid grid-cols-2 gap-4">
+               <div>
+                 <label className="text-xs font-bold text-slate-400 mr-2 block mb-1">الكمية بالمخزن</label>
+                 <input required type="number" value={formData.stock_quantity} onChange={e => setFormData({...formData, stock_quantity: parseInt(e.target.value)})} className="w-full px-5 py-3 rounded-2xl bg-slate-50 border border-slate-100 font-bold" />
+               </div>
+               <div>
+                 <label className="text-xs font-bold text-slate-400 mr-2 block mb-1">أقل كمية (تنبيه)</label>
+                 <input required type="number" value={formData.min_stock_level} onChange={e => setFormData({...formData, min_stock_level: parseInt(e.target.value)})} className="w-full px-5 py-3 rounded-2xl bg-amber-50 border border-amber-100 font-bold text-amber-700" />
+               </div>
+             </div>
+
+             <div className="flex gap-4 pt-4">
+               <button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl transition shadow-xl shadow-orange-100">
+                 {isEditing ? 'تحديث البيانات' : 'إضافة الآن'}
+               </button>
+               {isEditing && (
+                 <button type="button" onClick={resetForm} className="px-6 bg-slate-100 text-slate-500 rounded-2xl"><X className="w-6 h-6"/></button>
+               )}
+             </div>
+           </form>
         </div>
 
-        {/* Products List */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-200">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-              <h2 className="text-xl font-bold flex items-center gap-2 text-slate-800">
-                <Package className="w-6 h-6 text-slate-400" />
-                المنتجات المسجلة ({filteredProducts.length})
-              </h2>
-            </div>
- 
-            <div className="relative">
-              <Search className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث بكود أو اسم المنتج..."
-                className="w-full pl-4 pr-11 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition"
-              />
-            </div>
-          </div>
- 
-          {/* Desktop Table View */}
-          <div className="hidden md:block bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full text-right border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-sm text-slate-500 border-b border-slate-100">
-                  <th className="px-4 py-4 font-bold">الكود</th>
-                  <th className="px-4 py-4 font-bold">الاسم</th>
-                  <th className="px-4 py-4 font-bold">السعر</th>
-                  <th className="px-4 py-4 font-bold">الخصم</th>
-                  <th className="px-4 py-4 font-bold">الكمية</th>
-                  <th className="px-4 py-4 font-bold">الحالة</th>
-                  <th className="px-4 py-4 font-bold text-center">إجراء</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map(p => (
-                  <tr key={p.id} className="border-b last:border-0 hover:bg-slate-50/50 transition">
-                    <td className="px-4 py-4 font-bold text-slate-800">{p.code}</td>
-                    <td className="px-4 py-4 text-slate-600">{p.name}</td>
-                    <td className="px-4 py-4 text-blue-600 font-bold">{p.price_before || p.price} ج.م</td>
-                    <td className="px-4 py-4 text-red-500 font-medium">
-                      {p.price_after ? `${p.price_after} ج.م` : p.discountPercentage ? `${p.discountPercentage}%` : '-'}
-                    </td>
-                    <td className="px-4 py-4 font-medium text-slate-700">{p.quantity || 0}</td>
-                    <td className="px-4 py-4">
-                      <button 
-                        onClick={() => toggleStock(p.id!, p.inStock !== false)}
-                        className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-full transition-all font-bold ${p.inStock !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-                      >
-                        {p.inStock !== false ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                        {p.inStock !== false ? 'متوفر' : 'منتهي'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex justify-center gap-2">
-                        <button onClick={() => handleEdit(p)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition" title="تعديل">
-                          <Edit className="w-5 h-5" />
-                        </button>
-                        <button onClick={() => handleDelete(p.id!)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition" title="حذف">
-                          <Trash2 className="w-5 h-5" />
-                        </button>
+        <div className="lg:col-span-8 space-y-6">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {filteredProducts.map(product => (
+                <div key={product.id} className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
+                   {product.stock_quantity <= product.min_stock_level && (
+                     <div className="absolute top-0 right-0 p-3 bg-amber-500 text-white rounded-bl-3xl">
+                       <AlertCircle className="w-5 h-5 animate-pulse" />
+                     </div>
+                   )}
+                   
+                   <div className="flex items-start justify-between mb-6">
+                     <div>
+                       <span className="text-xs font-bold text-orange-500 mb-1 block uppercase tracking-widest">{product.category || 'بدون تصنيف'}</span>
+                       <h3 className="text-xl font-black text-slate-800">{product.name}</h3>
+                       <p className="text-slate-400 font-bold text-sm">كود: {product.code}</p>
+                     </div>
+                     <div className="text-left">
+                       <span className="text-2xl font-black text-slate-800">{(product.price_sell_after || product.price_sell_before)} ج.م</span>
+                       <div className="flex items-center gap-2 justify-end mt-1">
+                          {product.price_sell_after && product.price_sell_before > product.price_sell_after && (
+                            <span className="text-xs text-slate-300 line-through font-bold">{product.price_sell_before}</span>
+                          )}
+                          <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded-lg text-[10px] font-black">
+                            ربح {((product.price_sell_after || product.price_sell_before) - (product.price_buy || 0)).toFixed(1)} ج.م
+                          </span>
+                       </div>
+                     </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-4 mb-6">
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                         <span className="text-[10px] font-bold text-slate-400 block mb-1">المخزون الحالي</span>
+                         <div className="flex items-center gap-2">
+                           <Layers className="w-4 h-4 text-slate-400" />
+                           <span className={`text-lg font-black ${product.stock_quantity <= product.min_stock_level ? 'text-amber-500' : 'text-slate-700'}`}>
+                             {product.stock_quantity} قطعة
+                           </span>
+                         </div>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                         <span className="text-[10px] font-bold text-slate-400 block mb-1">رأس مال المنتج</span>
+                         <div className="flex items-center gap-2">
+                           <DollarSign className="w-4 h-4 text-slate-400" />
+                           <span className="text-lg font-black text-slate-700">{product.price_buy} ج.م</span>
+                         </div>
+                      </div>
+                   </div>
 
-          {/* Mobile Card View */}
-          <div className="md:hidden space-y-4">
-            {filteredProducts.map(p => (
-              <div key={p.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="text-xs text-slate-400 mb-1">موديل: {p.code}</div>
-                    <div className="text-lg font-bold text-slate-800">{p.name}</div>
-                  </div>
-                  <button 
-                    onClick={() => toggleStock(p.id!, p.inStock !== false)}
-                    className={`px-3 py-1 rounded-full text-xs font-bold ${p.inStock !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-                  >
-                    {p.inStock !== false ? 'متوفر' : 'منتهي'}
-                  </button>
+                   <div className="flex gap-2">
+                      <button onClick={() => setIsEditing(true) || setEditingId(product.id) || setFormData(product)} className="flex-1 bg-slate-50 hover:bg-orange-50 text-slate-400 hover:text-orange-500 py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm">
+                        <Edit className="w-4 h-4" /> تعديل
+                      </button>
+                      <button onClick={() => deleteProduct(product.id)} className="p-3 bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 rounded-xl transition-all">
+                        <Trash2 className="w-5 h-5" />
+                      </button>
+                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 py-3 border-y border-slate-50 mb-4">
-                  <div>
-                    <div className="text-xs text-slate-400 mb-0.5">السعر</div>
-                    <div className="font-bold text-blue-600">{p.price_before || p.price} ج.م</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400 mb-0.5">الخصم</div>
-                    <div className="font-bold text-red-500">{p.price_after ? `${p.price_after}` : p.discountPercentage ? `${p.discountPercentage}%` : 'لا يوجد'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400 mb-0.5">المقاس</div>
-                    <div className="font-bold text-slate-700">{p.size || 'غير محدد'}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-slate-400 mb-0.5">الكمية</div>
-                    <div className="font-bold text-slate-700">{p.quantity || 0}</div>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => handleEdit(p)} className="flex-1 flex items-center justify-center gap-2 bg-blue-50 text-blue-600 py-3 rounded-xl font-bold transition">
-                    <Edit className="w-4 h-4" /> تعديل
-                  </button>
-                  <button onClick={() => handleDelete(p.id!)} className="flex-1 flex items-center justify-center gap-2 bg-red-50 text-red-600 py-3 rounded-xl font-bold transition">
-                    <Trash2 className="w-4 h-4" /> حذف
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {filteredProducts.length === 0 && (
-            <div className="bg-white p-12 rounded-2xl shadow-sm border border-slate-200 text-center">
-              <Search className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-              <p className="text-slate-500 text-lg font-medium">لم يتم العثور على أي منتجات مطابقة</p>
-            </div>
-          )}
+              ))}
+           </div>
         </div>
       </div>
     </div>

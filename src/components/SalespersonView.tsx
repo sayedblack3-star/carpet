@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
-import { OrderItem, Order, BRANCHES } from '../types';
-import { Plus, Trash2, ShoppingCart, User, CheckCircle, Search, Clock, Receipt, Store, XCircle, RotateCcw } from 'lucide-react';
+import { OrderItem, Order, Branch, Product } from '../types';
+import { Plus, Trash2, ShoppingCart, User, CheckCircle, Search, Clock, Receipt, Store, XCircle, RotateCcw, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import ProductSearch from './ProductSearch';
@@ -13,540 +13,314 @@ interface SalespersonViewProps {
 
 export default function SalespersonView({ userBranchId }: SalespersonViewProps) {
   const [activeTab, setActiveTab] = useState<'order' | 'search' | 'history'>('order');
-  
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState(userBranchId || '');
   const [salespersonName, setSalespersonName] = useState('');
   const [sessionUser, setSessionUser] = useState<any>(null);
   
   const [productCode, setProductCode] = useState('');
-  const [productName, setProductName] = useState('');
-  const [originalPrice, setOriginalPrice] = useState('');
-  const [discountPercentage, setDiscountPercentage] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState('1');
-  const [productInStock, setProductInStock] = useState<boolean | null>(null);
-  const [availableQuantity, setAvailableQuantity] = useState<number | null>(null);
+  const [customPrice, setCustomPrice] = useState('');
   
-  const [items, setItems] = useState<OrderItem[]>([]);
+  const [items, setItems] = useState<Partial<OrderItem>[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
   const [myOrders, setMyOrders] = useState<Order[]>([]);
-  const prevOrdersRef = useRef<Order[]>([]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
             setSessionUser(session.user);
-            const savedName = localStorage.getItem('salespersonName');
-            setSalespersonName(savedName || session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email);
+            fetchProfile(session.user.id);
         }
     });
 
-    const savedBranch = localStorage.getItem('branchId');
-    if (userBranchId) {
-      setBranchId(userBranchId);
-    } else if (savedBranch) {
-      setBranchId(savedBranch);
-    } else if (BRANCHES.length > 0) {
-      setBranchId(BRANCHES[0].id);
+    const fetchBranches = async () => {
+      const { data } = await supabase.from('branches').select('*').eq('is_active', true);
+      if (data) setBranches(data);
+    };
+    fetchBranches();
+  }, []);
+
+  const fetchProfile = async (id: string) => {
+    const { data } = await supabase.from('profiles').select('full_name, branch_id').eq('id', id).single();
+    if (data) {
+      setSalespersonName(data.full_name || '');
+      if (!branchId) setBranchId(data.branch_id || '');
     }
-  }, [userBranchId]);
-
-  // Auto-fetch product details
-  useEffect(() => {
-    const fetchProductDetails = async () => {
-      if (productCode.trim().length >= 2) {
-        try {
-          const { data, error } = await supabase.from('products').select('*').eq('code', productCode.trim()).single();
-          
-          if (data && !error) {
-            const prod = data;
-            if (prod.is_deleted) {
-              toast.error('هذا المنتج تمت أرشفته ولا يمكن بيعه');
-              setProductInStock(null);
-              setAvailableQuantity(null);
-              return;
-            }
-            setProductName(prod.name);
-            
-            const basePrice = prod.price_before || prod.price || 0;
-            setOriginalPrice(basePrice.toString());
-            
-            if (prod.price_after && basePrice > 0) {
-               const calculatedDiscount = Math.round(((basePrice - prod.price_after) / basePrice) * 100);
-               setDiscountPercentage(calculatedDiscount.toString());
-            } else if (prod.discount_percentage !== undefined && prod.discount_percentage !== null) {
-              setDiscountPercentage(prod.discount_percentage.toString());
-            } else {
-              setDiscountPercentage('');
-            }
-            
-            if (prod.quantity !== undefined && prod.quantity !== null) {
-              setAvailableQuantity(prod.quantity);
-              setProductInStock(prod.quantity > 0);
-            } else {
-              setAvailableQuantity(null);
-              setProductInStock(prod.in_stock !== false);
-            }
-          } else {
-            setProductInStock(null);
-            setAvailableQuantity(null);
-          }
-        } catch (error) {
-          console.error("Error fetching product", error);
-        }
-      } else {
-        setProductInStock(null);
-        setAvailableQuantity(null);
-      }
-    };
-    
-    const timeoutId = setTimeout(() => {
-      fetchProductDetails();
-    }, 600);
-    
-    return () => clearTimeout(timeoutId);
-  }, [productCode]);
-
-  // Listen to salesperson's orders
-  useEffect(() => {
-    if (!sessionUser?.id || !branchId) return;
-
-    let channel: any;
-
-    const fetchOrders = async () => {
-        const { data, error } = await supabase.from('orders')
-          .select('*')
-          .eq('salesperson_id', sessionUser.id)
-          .eq('branch_id', branchId)
-          .order('created_at', { ascending: false })
-          .limit(50);
-          
-        if (data) {
-            const ordersData = data.map((d: any) => ({
-                id: d.id,
-                branchId: d.branch_id,
-                salespersonId: d.salesperson_id,
-                salespersonName: d.salesperson_name,
-                items: d.items,
-                totalOriginalPrice: d.total_original_price,
-                totalFinalPrice: d.total_final_price,
-                status: d.status,
-                requiresManagerApproval: d.requires_manager_approval,
-                createdAt: new Date(d.created_at)
-            }));
-            
-            // Check newly completed
-            ordersData.forEach(newOrder => {
-                const oldOrder = prevOrdersRef.current.find(o => o.id === newOrder.id);
-                if (oldOrder && oldOrder.status === 'pending' && newOrder.status === 'completed') {
-                  toast.success(`الكاشير قام بتأكيد طلبك بقيمة ${newOrder.totalFinalPrice.toFixed(2)} ج.م!`, {
-                    duration: 6000,
-                    icon: '🎉'
-                  });
-                }
-            });
-
-            prevOrdersRef.current = ordersData;
-            setMyOrders(ordersData);
-        }
-    };
-
-    fetchOrders();
-
-    channel = supabase.channel('orders-changes')
-      .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'orders',
-          filter: `salesperson_id=eq.${sessionUser.id}` 
-      }, (payload) => {
-          fetchOrders();
-      })
-      .subscribe();
-
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, [sessionUser, branchId]);
-
-  const handleSaveSalesperson = () => {
-    if (branchId) localStorage.setItem('branchId', branchId);
-    if (salespersonName) localStorage.setItem('salespersonName', salespersonName);
-    toast.success('تم حفظ بيانات البائع والفرع');
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!productCode || !originalPrice) {
-      toast.error('يرجى إدخال كود المنتج والسعر');
+  useEffect(() => {
+    if (productCode.trim().length >= 2) {
+      const timer = setTimeout(async () => {
+        const { data } = await supabase.from('products').select('*').eq('code', productCode.trim()).eq('is_active', true).single();
+        if (data) {
+          setSelectedProduct(data as Product);
+          setCustomPrice((data.price_sell_after || data.price_sell_before).toString());
+        } else {
+          setSelectedProduct(null);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [productCode]);
+
+  const addItem = () => {
+    if (!selectedProduct) {
+      toast.error('يرجى اختيار منتج صحيح');
+      return;
+    }
+    const qty = parseInt(quantity);
+    if (isNaN(qty) || qty <= 0) {
+      toast.error('يرجى إدخال كمية صحيحة');
       return;
     }
 
-    const price = parseFloat(originalPrice);
-    const discount = parseFloat(discountPercentage) || 0;
-    const qty = parseInt(quantity) || 1;
-
-    // Validation: Max Discount
-    if (discount > 25) {
-      toast.warning('نسبة الخصم تتجاوز 25%، سيتطلب هذا موافقة الإدارة عند الدفع');
-    }
-
-    // Validation: Quantity
-    if (availableQuantity !== null && qty > availableQuantity) {
-      toast.error(`الكمية المطلوبة (${qty}) غير متوفرة في المخزن. المتاح: ${availableQuantity}`);
-      return;
-    }
-
-    const finalPrice = (price - (price * (discount / 100))) * qty;
-
-    const newItem: OrderItem = {
-      id: Math.random().toString(36).substring(7),
-      productCode: productCode.trim(),
-      productName: productName || 'سجاد',
-      originalPrice: price,
-      discountPercentage: discount,
-      finalPrice: finalPrice,
-      quantity: qty
+    const price = parseFloat(customPrice);
+    const newItem: Partial<OrderItem> = {
+      product_id: selectedProduct.id,
+      product_name: selectedProduct.name,
+      quantity: qty,
+      unit_price: price,
+      discount_amount: (selectedProduct.price_sell_before - price) * qty,
+      total_price: price * qty
     };
 
     setItems([...items, newItem]);
-    
     setProductCode('');
-    setProductName('');
-    setOriginalPrice('');
-    setDiscountPercentage('');
+    setSelectedProduct(null);
     setQuantity('1');
-    setProductInStock(null);
-    setAvailableQuantity(null);
-    
-    toast.success('تم إضافة المنتج للفاتورة');
+    toast.success('تمت إضافة المنتج للقائمة');
   };
 
-  const handleRemoveItem = (id: string) => {
-    setItems(items.filter(item => item.id !== id));
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
   };
-
-  const totalOriginal = items.reduce((sum, item) => sum + (item.originalPrice * item.quantity), 0);
-  const totalFinal = items.reduce((sum, item) => sum + item.finalPrice, 0);
 
   const handleSubmitOrder = async () => {
-    if (!branchId) {
-      toast.error('يرجى اختيار الفرع أولاً');
-      return;
-    }
-    if (!sessionUser?.id || !salespersonName) {
-      toast.error('يرجى حفظ كود واسم البائع أولاً');
-      return;
-    }
     if (items.length === 0) {
-      toast.error('الفاتورة فارغة');
+      toast.error('القائمة فارغة!');
       return;
     }
-
-    const hasHighDiscount = items.some(item => item.discountPercentage > 25);
+    if (!branchId) {
+      toast.error('يرجى اختيار الفرع');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      const { error } = await supabase.from('orders').insert([{
+      const totalOriginal = items.reduce((sum, item) => sum + (item.unit_price! * item.quantity!), 0);
+      const totalFinal = totalOriginal; // Simplified for now
+
+      // 1. Insert Order
+      const { data: order, error: orderError } = await supabase.from('orders').insert([{
         branch_id: branchId,
         salesperson_id: sessionUser.id,
         salesperson_name: salespersonName,
-        items,
+        status: 'sent',
         total_original_price: totalOriginal,
         total_final_price: totalFinal,
-        status: 'pending',
-        requires_manager_approval: hasHighDiscount
+        requires_manager_approval: false
+      }]).select().single();
+
+      if (orderError) throw orderError;
+
+      // 2. Insert Order Items
+      const orderItems = items.map(item => ({
+        order_id: order.id,
+        product_id: item.product_id,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        discount_amount: item.discount_amount,
+        total_price: item.total_price
+      }));
+
+      const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+      if (itemsError) throw itemsError;
+
+      // 3. Create Notification for Cashiers in the same branch
+      await supabase.from('notifications').insert([{
+        branch_id: branchId,
+        sender_id: sessionUser.id,
+        title: 'طلب جديد 🆕',
+        message: `تم إنشاء طلب جديد برقم ${order.order_number} بواسطة ${salespersonName}`,
+        type: 'order_update'
       }]);
-      
-      if (error) throw error;
-      
+
       toast.success('تم إرسال الطلب للكاشير بنجاح!');
       setItems([]);
+      setActiveTab('history');
+      fetchMyOrders();
     } catch (error: any) {
-      console.error('Error adding order: ', error);
-      const errorMsg = error?.message || '';
-      if (errorMsg.includes('permission denied') || errorMsg.includes('policy')) {
-        toast.error('خطأ في الصلاحيات: يرجى التأكد من تفعيل RLS لجدول الطلبات');
-      } else {
-        toast.error('حدث خطأ أثناء إرسال الطلب: ' + (error?.message || 'خطأ غير معروف'));
-      }
+      toast.error('حدث خطأ: ' + error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const fetchMyOrders = async () => {
+    if (!sessionUser) return;
+    const { data } = await supabase.from('orders').select('*').eq('salesperson_id', sessionUser.id).order('created_at', { ascending: false }).limit(20);
+    if (data) setMyOrders(data as Order[]);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'history') fetchMyOrders();
+  }, [activeTab, sessionUser]);
+
   return (
-    <div className="pb-24">
-      <div className="p-4 max-w-3xl mx-auto">
-        <ShiftManager userRole="salesperson" userBranchId={userBranchId || branchId} userName={salespersonName || 'بائع'} />
-      </div>
+    <div className="min-h-full pharaonic-bg p-4 sm:p-6" dir="rtl">
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
+            <ShoppingCart className="w-8 h-8 text-blue-600" /> واجهة البائع الجديد
+          </h1>
+          <p className="text-slate-500 font-medium mt-1">نسخة ERP الاحترافية لإدارة المبيعات</p>
+        </div>
+        
+        <div className="flex bg-white/50 backdrop-blur-md p-1 rounded-2xl border border-white/50 shadow-sm">
+          <button onClick={() => setActiveTab('order')} className={`px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'order' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/50'}`}>طلب جديد</button>
+          <button onClick={() => setActiveTab('history')} className={`px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/50'}`}>سجل مبيعاتي</button>
+          <button onClick={() => setActiveTab('search')} className={`px-6 py-2.5 rounded-xl font-bold transition-all ${activeTab === 'search' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-white/50'}`}>بحث</button>
+        </div>
+      </header>
 
-      <div className="flex p-2 bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-        <button 
-          onClick={() => setActiveTab('order')}
-          className={`flex-1 py-3 text-sm font-bold rounded-lg transition flex items-center justify-center gap-2 ${activeTab === 'order' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-        >
-          <Plus className="w-4 h-4" /> إنشاء فاتورة
-        </button>
-        <button 
-          onClick={() => setActiveTab('search')}
-          className={`flex-1 py-3 text-sm font-bold rounded-lg transition flex items-center justify-center gap-2 ${activeTab === 'search' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-        >
-          <Search className="w-4 h-4" /> بحث عن منتج
-        </button>
-        <button 
-          onClick={() => setActiveTab('history')}
-          className={`flex-1 py-3 text-sm font-bold rounded-lg transition flex items-center justify-center gap-2 ${activeTab === 'history' ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
-        >
-          <Receipt className="w-4 h-4" /> متابعة طلباتي
-        </button>
-      </div>
-
-      <div className="mt-4">
-        {activeTab === 'search' ? (
-          <ProductSearch />
-        ) : activeTab === 'history' ? (
-          <div className="max-w-3xl mx-auto p-4 space-y-4">
-            <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <Receipt className="w-6 h-6 text-blue-600" />
-              سجل طلباتي
-            </h2>
-            {myOrders.length === 0 ? (
-              <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-100 text-center">
-                <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-bold text-slate-700 mb-1">لا توجد طلبات سابقة</h3>
-                <p className="text-slate-500">الطلبات التي تقوم بإنشائها ستظهر هنا لمتابعة حالتها.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {myOrders.map(order => (
-                  <div key={order.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex flex-col sm:flex-row justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-sm font-bold text-slate-800">
-                          {order.createdAt ? format(order.createdAt, 'yyyy-MM-dd HH:mm') : 'جاري التحميل...'}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded-full flex items-center gap-1 ${order.status === 'completed' ? 'bg-green-100 text-green-700' : order.status === 'cancelled' ? 'bg-red-100 text-red-700' : order.status === 'returned' ? 'bg-purple-100 text-purple-700' : 'bg-orange-100 text-orange-700'}`}>
-                          {order.status === 'completed' ? <CheckCircle className="w-3 h-3" /> : order.status === 'cancelled' ? <XCircle className="w-3 h-3" /> : order.status === 'returned' ? <RotateCcw className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                          {order.status === 'completed' ? 'تم الدفع (مكتمل)' : order.status === 'cancelled' ? 'ملغي' : order.status === 'returned' ? 'مرتجع' : 'في انتظار الكاشير'}
-                        </span>
-                      </div>
-                      <div className="text-sm text-slate-600">
-                        {order.items.length} منتجات: {order.items.map(i => i.productName || i.productCode).join('، ')}
-                      </div>
-                    </div>
-                    <div className="text-right sm:text-left flex flex-col justify-center">
-                      <div className="text-xs text-slate-500">الصافي المطلوب</div>
-                      <div className="font-bold text-lg text-blue-600">{order.totalFinalPrice.toFixed(2)} ج.م</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="max-w-md mx-auto p-4 space-y-6">
-            {/* Salesperson Info */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <User className="w-5 h-5 text-blue-600" />
-                بيانات البائع والفرع
+      {activeTab === 'order' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white p-6 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-50">
+              <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <Store className="w-5 h-5 text-blue-500" /> إعدادات الفرع
               </h2>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1 flex items-center gap-1">
-                    <Store className="w-3 h-3" /> الفرع الحالي
-                  </label>
-                  {userBranchId ? (
-                    <div className="w-full p-2 bg-slate-100 border border-slate-200 rounded-lg text-sm text-slate-700 font-medium">
-                      {BRANCHES.find(b => b.id === userBranchId)?.name || 'فرع غير معروف'}
-                    </div>
-                  ) : (
-                    <select 
-                      value={branchId}
-                      onChange={(e) => {
-                        setBranchId(e.target.value);
-                      }}
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50"
-                    >
-                      <option value="" disabled>اختر الفرع...</option>
-                      {BRANCHES.map(branch => (
-                        <option key={branch.id} value={branch.id}>{branch.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">اسم البائع</label>
-                    <input 
-                      type="text" 
-                      value={salespersonName}
-                      onChange={(e) => setSalespersonName(e.target.value)}
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                      placeholder="مثال: أحمد"
-                    />
-                  </div>
-                </div>
-              </div>
-              <button 
-                onClick={handleSaveSalesperson}
-                className="mt-4 w-full text-xs text-blue-600 font-medium py-2 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
-              >
-                حفظ البيانات للجلسة القادمة
-              </button>
+              <select value={branchId} onChange={e => setBranchId(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-blue-100 outline-none font-bold text-slate-700 appearance-none">
+                <option value="">اختر الفرع...</option>
+                {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
             </div>
 
-            {/* Add Item Form */}
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-green-600" />
-                إضافة منتج
+            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-50">
+              <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-blue-500" /> إضافة منتج
               </h2>
-              <form onSubmit={handleAddItem} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">كود المنتج</label>
-                    <div className="relative">
-                      <input 
-                        type="text" 
-                        value={productCode}
-                        onChange={(e) => setProductCode(e.target.value)}
-                        className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                        placeholder="اكتب الكود للبحث التلقائي..."
-                        required
-                      />
-                      {productInStock !== null && (
-                        <div className={`absolute left-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded-full ${productInStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {productInStock ? (availableQuantity !== null ? `متوفر (${availableQuantity})` : 'متوفر') : 'غير متوفر'}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">اسم المنتج</label>
-                    <input 
-                      type="text" 
-                      value={productName}
-                      onChange={(e) => setProductName(e.target.value)}
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-slate-50"
-                      placeholder="سجاد..."
-                    />
-                  </div>
+              
+              <div className="space-y-4">
+                <div className="relative">
+                  <input type="text" value={productCode} onChange={e => setProductCode(e.target.value)} placeholder="كود المنتج..." className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-blue-100 outline-none font-bold" />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">السعر الأساسي</label>
-                    <input 
-                      type="number" 
-                      value={originalPrice}
-                      onChange={(e) => setOriginalPrice(e.target.value)}
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-slate-50"
-                      placeholder="0.00"
-                      min="0"
-                      step="0.01"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">نسبة الخصم %</label>
-                    <input 
-                      type="number" 
-                      value={discountPercentage}
-                      onChange={(e) => setDiscountPercentage(e.target.value)}
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                      placeholder="0"
-                      min="0"
-                      max="25"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">الكمية</label>
-                    <input 
-                      type="number" 
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none"
-                      placeholder="1"
-                      min="1"
-                      required
-                    />
-                  </div>
-                </div>
-                {originalPrice && (
-                  <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex justify-between items-center">
-                    <span className="text-sm font-medium text-blue-800">السعر بعد الخصم:</span>
-                    <span className="text-lg font-bold text-blue-600">
-                      {((parseFloat(originalPrice) - (parseFloat(originalPrice) * ((parseFloat(discountPercentage) || 0) / 100))) * (parseInt(quantity) || 1)).toFixed(2)} ج.م
-                    </span>
+
+                {selectedProduct && (
+                  <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 animate-in fade-in slide-in-from-top-2">
+                    <p className="font-bold text-blue-900">{selectedProduct.name}</p>
+                    <p className="text-sm text-blue-600">المخزن: {selectedProduct.stock_quantity} قطعة</p>
+                    {selectedProduct.stock_quantity <= selectedProduct.min_stock_level && (
+                       <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-600 font-bold bg-amber-50 p-2 rounded-lg">
+                         <AlertTriangle className="w-4 h-4" /> مخزون منخفض!
+                       </div>
+                    )}
                   </div>
                 )}
-                <button 
-                  type="submit"
-                  className="w-full bg-green-600 text-white font-medium py-2.5 rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2 mt-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  إضافة للفاتورة
-                </button>
-              </form>
-            </div>
 
-            {/* Cart */}
-            {items.length > 0 && (
-              <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
-                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5 text-orange-600" />
-                  الفاتورة الحالية ({items.length})
-                </h2>
-                <div className="space-y-3 mb-4">
-                  {items.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 mr-2 mb-1 block">الكمية</label>
+                    <input type="number" value={quantity} onChange={e => setQuantity(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 font-bold" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 mr-2 mb-1 block">السعر</label>
+                    <input type="number" value={customPrice} onChange={e => setCustomPrice(e.target.value)} className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 font-bold text-blue-600" />
+                  </div>
+                </div>
+
+                <button onClick={addItem} disabled={!selectedProduct} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                  إضافة للقائمة
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="lg:col-span-2">
+            <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] shadow-2xl shadow-slate-200/50 border border-white min-h-[600px] flex flex-col">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-black text-slate-800">قائمة الطلب الحالية</h2>
+                <span className="bg-blue-100 text-blue-700 px-4 py-1.5 rounded-full font-bold">{items.length} منتجات</span>
+              </div>
+
+              <div className="flex-1 space-y-4 overflow-y-auto max-h-[450px] custom-scrollbar pr-2">
+                {items.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-64 text-slate-300">
+                    <ShoppingCart className="w-20 h-20 mb-4 opacity-20" />
+                    <p className="font-bold text-lg">لم يتم اختيار أي منتجات بعد</p>
+                  </div>
+                ) : (
+                  items.map((item, index) => (
+                    <div key={index} className="flex items-center justify-between p-5 bg-slate-50 rounded-3xl border border-slate-100 group animate-in slide-in-from-left-4">
                       <div>
-                        <div className="font-bold text-sm text-slate-800">{item.productCode} <span className="text-slate-500 font-normal text-xs">(الكمية: {item.quantity})</span></div>
-                        <div className="text-xs text-slate-500">
-                          {item.originalPrice} ج.م 
-                          {item.discountPercentage > 0 && (
-                            <span className="text-red-500 ml-1">(-{item.discountPercentage}%)</span>
-                          )}
+                        <h4 className="font-bold text-slate-800">{item.product_name}</h4>
+                        <div className="flex items-center gap-4 mt-1">
+                          <span className="text-sm font-medium text-slate-400">الكمية: <span className="text-slate-800 font-bold">{item.quantity}</span></span>
+                          <span className="text-sm font-medium text-slate-400">السعر: <span className="text-blue-600 font-bold">{item.unit_price} ج.م</span></span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="font-bold text-green-600">{item.finalPrice.toFixed(2)} ج.م</div>
-                        <button 
-                          onClick={() => handleRemoveItem(item.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
+                      <div className="flex items-center gap-6">
+                        <span className="text-lg font-black text-slate-800">{item.total_price} ج.م</span>
+                        <button onClick={() => removeItem(index)} className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all">
+                          <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-                <div className="border-t border-slate-200 pt-3 mb-4">
-                  <div className="flex justify-between text-sm text-slate-600 mb-1">
-                    <span>الإجمالي قبل الخصم:</span>
-                    <span>{totalOriginal.toFixed(2)} ج.م</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-lg text-slate-800">
-                    <span>الصافي المطلوب:</span>
-                    <span className="text-green-600">{totalFinal.toFixed(2)} ج.م</span>
-                  </div>
-                </div>
-                <button 
-                  onClick={handleSubmitOrder}
-                  disabled={isSubmitting}
-                  className="w-full bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-70"
-                >
-                  {isSubmitting ? 'جاري الإرسال...' : (
-                    <>
-                      <CheckCircle className="w-5 h-5" />
-                      تأكيد وإرسال للكاشير
-                    </>
-                  )}
-                </button>
+                  ))
+                )}
               </div>
-            )}
+
+              {items.length > 0 && (
+                <div className="mt-8 pt-8 border-t-2 border-slate-50">
+                  <div className="flex items-center justify-between mb-6 px-4">
+                    <span className="text-slate-400 text-lg font-bold">إجمالي المبلغ:</span>
+                    <span className="text-3xl font-black text-blue-600">
+                      {items.reduce((sum, item) => sum + (item.total_price || 0), 0)} ج.م
+                    </span>
+                  </div>
+                  <button onClick={handleSubmitOrder} disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-[2rem] text-xl transition-all shadow-xl shadow-blue-200/50 flex items-center justify-center gap-3 disabled:opacity-70">
+                    {isSubmitting ? <Clock className="w-6 h-6 animate-spin" /> : <><CheckCircle className="w-7 h-7" /> إرسال الطلب للكاشير</>}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {activeTab === 'history' && (
+        <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] shadow-2xl shadow-slate-200/50 border border-white">
+          <h2 className="text-2xl font-black text-slate-800 mb-8">آخر مبيعاتي</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {myOrders.map(order => (
+              <div key={order.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <span className="text-xs font-bold text-slate-400 mb-1 block">رقم الطلب</span>
+                    <h3 className="font-black text-slate-800 text-lg">#{order.order_number}</h3>
+                  </div>
+                  <span className={`px-4 py-1.5 rounded-full text-xs font-bold ${
+                    order.status === 'confirmed' ? 'bg-emerald-100 text-emerald-600' :
+                    order.status === 'sent' ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {order.status === 'confirmed' ? 'تم التحصيل' : 'في انتظار الكاشير'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-4 border-t border-slate-50">
+                   <span className="text-slate-400 text-sm font-medium">{format(new Date(order.created_at), 'yyyy-MM-dd HH:mm')}</span>
+                   <span className="text-lg font-black text-slate-800">{order.total_final_price} ج.م</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'search' && <ProductSearch />}
+      <ShiftManager userId={sessionUser?.id} branchId={branchId} />
     </div>
   );
 }
