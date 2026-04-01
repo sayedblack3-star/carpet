@@ -260,9 +260,14 @@ export default function SalespersonView({ userBranchId }: SalespersonViewProps) 
       
       toast.success('تم إرسال الطلب للكاشير بنجاح!');
       setItems([]);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding order: ', error);
-      toast.error('حدث خطأ أثناء إرسال الطلب');
+      const errorMsg = error?.message || '';
+      if (errorMsg.includes('permission denied') || errorMsg.includes('policy')) {
+        toast.error('خطأ في الصلاحيات: يرجى التأكد من تفعيل RLS لجدول الطلبات');
+      } else {
+        toast.error('حدث خطأ أثناء إرسال الطلب: ' + (error?.message || 'خطأ غير معروف'));
+      }
     } finally {
       setIsSubmitting(false);
     }
