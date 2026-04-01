@@ -4,7 +4,7 @@ import { Product, Order, OrderItem, Branch, Profile } from '../types';
 import { 
   Search, ShoppingCart, Plus, Minus, Trash2, Send, Clock, Package, 
   CheckCircle2, CreditCard, ChevronRight, AlertCircle, Store, User, Filter, 
-  TrendingUp, ArrowLeft, MoreVertical, X, Check
+  TrendingUp, ArrowLeft, MoreVertical, X, Check, History as HistoryIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -74,6 +74,11 @@ const SalespersonView: React.FC = () => {
   };
 
   const addToCart = (product: Product) => {
+    const isManagement = currentProfile?.role === 'owner' || currentProfile?.role === 'admin';
+    if (!activeShift && !isManagement) {
+       toast.error('يجب عليك بـدء وردية عمل أولاً قبل تحصيل الأموال');
+       return;
+    }
     if (product.stock_quantity <= 0) {
       toast.error('هذا المنتج غير متوفر في المخزن حالياً');
       return;
@@ -186,8 +191,9 @@ const SalespersonView: React.FC = () => {
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price_sell_after || item.price_sell_before) * item.cartQuantity, 0);
 
-  // Task 6: Block if no active shift
-  if (!activeShift && !loadingShift) {
+  // Task 6: Block if no active shift (Bypass for Owner/Admin)
+  const isManagement = currentProfile?.role === 'owner' || currentProfile?.role === 'admin';
+  if (!activeShift && !loadingShift && !isManagement) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 pharaonic-bg p-4" dir="rtl">
         <div className="max-w-md w-full bg-white p-12 rounded-[3.5rem] shadow-2xl border border-red-100 text-center relative overflow-hidden">
@@ -236,7 +242,7 @@ const SalespersonView: React.FC = () => {
             onClick={() => setView('history')}
             className={`px-6 py-3.5 rounded-2xl font-black transition-all flex items-center gap-2 ${view === 'history' ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
           >
-            <History className="w-5 h-5" /> طلباتي الأخيرة
+            <HistoryIcon className="w-5 h-5" /> طلباتي الأخيرة
           </button>
         </div>
       </div>

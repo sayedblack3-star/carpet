@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { 
   Search, Printer, CheckCircle, Clock, Trash2, ShieldAlert, CreditCard, 
   ChevronRight, AlertCircle, ShoppingCart, User, Store as BranchIcon, ArrowLeft, Filter, 
-  TrendingUp, Monitor, Edit2, Copy, X, RotateCcw, Bell, BellRing, History
+  TrendingUp, Monitor, Edit2, Copy, X, RotateCcw, Bell, BellRing, History as HistoryIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ShiftManager from './ShiftManager';
@@ -82,7 +82,8 @@ const CashierView: React.FC = () => {
   };
 
   const markAsConfirmed = async (order: Order) => {
-    if (!activeShift) {
+    const isManagement = currentProfile?.role === 'owner' || currentProfile?.role === 'admin';
+    if (!activeShift && !isManagement) {
        toast.error('يجب عليك بـدء وردية عمل أولاً قبل تحصيل الأموال');
        return;
     }
