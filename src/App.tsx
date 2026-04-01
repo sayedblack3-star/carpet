@@ -113,13 +113,13 @@ const App: React.FC = () => {
   }
 
   const tabs = [
-    { id: 'dashboard', label: 'الإحصائيات', icon: BarChart3, roles: ['owner', 'branch_manager'] },
-    { id: 'pos', label: 'نظام البيع', icon: ShoppingCart, roles: ['owner', 'branch_manager', 'seller'] },
-    { id: 'cashier', label: 'نظام التحصيل', icon: Store, roles: ['owner', 'branch_manager', 'cashier'] },
-    { id: 'inventory', label: 'المخزن والأسعار', icon: Package, roles: ['owner', 'branch_manager', 'price_manager'] },
-    { id: 'shortages', label: 'النواقص', icon: ShieldAlert, roles: ['owner', 'branch_manager', 'seller', 'cashier'] },
-    { id: 'users', label: 'الموظفين والفروع', icon: Users, roles: ['owner'] },
-    { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['owner', 'branch_manager'] },
+    { id: 'dashboard', label: 'الإحصائيات', icon: BarChart3, roles: ['owner', 'admin', 'branch_manager'] },
+    { id: 'pos', label: 'نظام البيع', icon: ShoppingCart, roles: ['owner', 'admin', 'branch_manager', 'seller'] },
+    { id: 'cashier', label: 'نظام التحصيل', icon: Store, roles: ['owner', 'admin', 'branch_manager', 'cashier'] },
+    { id: 'inventory', label: 'المخزن والأسعار', icon: Package, roles: ['owner', 'admin', 'branch_manager', 'price_manager'] },
+    { id: 'shortages', label: 'النواقص', icon: ShieldAlert, roles: ['owner', 'admin', 'branch_manager', 'seller', 'cashier'] },
+    { id: 'users', label: 'الموظفين والفروع', icon: Users, roles: ['owner', 'admin'] },
+    { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['owner', 'admin', 'branch_manager'] },
   ];
 
   const role = profile?.role || 'seller';
@@ -190,7 +190,7 @@ const App: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-md text-[9px] font-black uppercase">
-                  {profile?.role === 'owner' ? 'المالك' : 
+                  {(profile?.role === 'owner' || profile?.role === 'admin') ? 'المالك / المدير' : 
                    profile?.role === 'branch_manager' ? 'مدير فرع' : 
                    profile?.role === 'seller' ? 'بائع' : 
                    profile?.role === 'cashier' ? 'كاشير' : 'مسؤول الأسعار'}
