@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Order, OrderItem, BRANCHES, Product } from '../types';
 import { format } from 'date-fns';
-import { Copy, CheckCircle, Clock, Trash2, Edit, X, ShoppingCart, Store, Printer, RotateCcw } from 'lucide-react';
+import { Copy, CheckCircle, Clock, Trash2, Edit, X, ShoppingCart, Store, Printer, RotateCcw, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 import ShiftManager from './ShiftManager';
@@ -217,12 +217,12 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-slate-50" dir="rtl">
-      <div className="p-4 border-b border-slate-200 bg-white">
+      <div className="p-2 sm:p-4 border-b border-slate-200 bg-white">
         <ShiftManager userRole="cashier" userBranchId={userBranchId || selectedBranch} userName={sessionUser?.user_metadata?.full_name || 'الكاشير'} />
       </div>
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* Sidebar - Orders List */}
-        <div className="w-1/3 border-l border-slate-200 bg-white flex flex-col h-full">
+        <div className={`w-full lg:w-1/3 border-l border-slate-200 bg-white flex flex-col h-full transition-transform duration-300 lg:translate-x-0 ${selectedOrder ? 'hidden lg:flex' : 'flex'}`}>
             <div className="p-4 border-b border-slate-200 bg-slate-50 space-y-3">
               <h2 className="font-bold text-lg text-slate-800">الطلبات الواردة</h2>
               <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200">
@@ -283,14 +283,21 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
           </div>
 
           {/* Main Content - Order Details */}
-          <div className="flex-1 flex flex-col bg-slate-50 h-full overflow-y-auto print:bg-white print:h-auto print:overflow-visible">
+          <div className={`flex-1 flex flex-col bg-slate-50 h-full overflow-y-auto print:bg-white print:h-auto print:overflow-visible ${!selectedOrder ? 'hidden lg:flex' : 'flex'}`}>
             {selectedOrder ? (
-              <div className="p-6 max-w-3xl mx-auto w-full print:p-0 print:max-w-full">
+              <div className="p-4 sm:p-6 max-w-3xl mx-auto w-full print:p-0 print:max-w-full">
+                {/* Mobile Back Button */}
+                <button 
+                  onClick={() => setSelectedOrder(null)}
+                  className="lg:hidden mb-4 flex items-center gap-2 text-blue-600 font-bold"
+                >
+                  <ArrowLeft className="w-5 h-5 rotate-180" /> العودة للقائمة
+                </button>
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden print:border-none print:shadow-none">
                   {/* Header */}
-                  <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-800 text-white print:bg-white print:text-black print:border-b-2 print:border-black">
+                  <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start gap-4 bg-slate-800 text-white print:bg-white print:text-black print:border-b-2 print:border-black">
                     <div>
-                      <h1 className="text-2xl font-bold mb-1">فاتورة مبيعات - Carpet Land</h1>
+                      <h1 className="text-xl sm:text-2xl font-bold mb-1">فاتورة مبيعات - Carpet Land</h1>
                       <div className="text-slate-300 text-sm print:text-slate-600">
                         {selectedOrder.createdAt ? format(selectedOrder.createdAt, 'yyyy-MM-dd HH:mm') : ''}
                       </div>
@@ -302,77 +309,138 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
                   </div>
 
                   {/* Actions */}
-                  <div className="p-4 bg-slate-50 border-b border-slate-100 flex gap-3 print:hidden">
+                  <div className="p-4 bg-slate-50 border-b border-slate-100 flex flex-wrap gap-2 sm:gap-3 print:hidden">
                     <button 
                       onClick={handlePrint}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium transition"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-xs sm:text-sm font-medium transition"
                     >
                       <Printer className="w-4 h-4" /> طباعة
                     </button>
                     <button 
                       onClick={() => handleCopyInvoice(selectedOrder)}
-                      className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium transition"
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-xs sm:text-sm font-medium transition"
                     >
-                      <Copy className="w-4 h-4" /> نسخ الفاتورة
+                      <Copy className="w-4 h-4" /> نسخ
                     </button>
                     
                     {selectedOrder.status === 'pending' && !isEditing && (
                       <button 
                         onClick={() => setIsEditing(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium transition"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-xs sm:text-sm font-medium transition"
                       >
-                        <Edit className="w-4 h-4" /> تعديل الفاتورة
+                        <Edit className="w-4 h-4" /> تعديل
                       </button>
                     )}
                     {isEditing && (
                       <button 
                         onClick={() => setIsEditing(false)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-sm font-medium transition"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 text-xs sm:text-sm font-medium transition"
                       >
-                        <X className="w-4 h-4" /> إلغاء التعديل
+                        <X className="w-4 h-4" /> إلغاء
                       </button>
                     )}
 
                     {selectedOrder.status === 'completed' && (
                       <button 
                         onClick={() => handleReturnOrder(selectedOrder.id!)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 text-sm font-medium transition"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-white border border-purple-200 text-purple-600 rounded-lg hover:bg-purple-50 text-xs sm:text-sm font-medium transition"
                       >
-                        <RotateCcw className="w-4 h-4" /> إرجاع الطلب
+                        <RotateCcw className="w-4 h-4" /> إرجاع
                       </button>
                     )}
 
                     {selectedOrder.status !== 'cancelled' && selectedOrder.status !== 'returned' && (
                       <button 
                         onClick={() => handleDeleteOrder(selectedOrder.id!)}
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 text-sm font-medium transition mr-auto"
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 text-xs sm:text-sm font-medium transition mr-auto"
                       >
-                        <X className="w-4 h-4" /> إلغاء الطلب
+                        <X className="w-4 h-4" /> إلغاء
                       </button>
                     )}
                   </div>
 
                   {/* Items */}
-                  <div className="p-6">
-                    <table className="w-full text-right">
-                      <thead>
-                        <tr className="text-sm text-slate-500 border-b border-slate-200">
-                          <th className="pb-3 font-medium">كود المنتج</th>
-                          <th className="pb-3 font-medium">الاسم</th>
-                          <th className="pb-3 font-medium">الكمية</th>
-                          <th className="pb-3 font-medium">السعر الأصلي</th>
-                          <th className="pb-3 font-medium">الخصم</th>
-                          <th className="pb-3 font-medium">الصافي</th>
-                          {isEditing && <th className="pb-3 font-medium">إجراء</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="text-sm">
-                        {(isEditing ? editItems : selectedOrder.items).map((item, idx) => (
-                          <tr key={item.id || idx} className="border-b border-slate-100 last:border-0">
-                            <td className="py-4 font-bold text-slate-800">{item.productCode}</td>
-                            <td className="py-4 text-slate-600">{item.productName}</td>
-                            <td className="py-4 text-slate-600">{item.quantity}</td>
-                            <td className="py-4 text-slate-600">
+                  <div className="p-4 sm:p-6">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-right">
+                        <thead>
+                          <tr className="text-sm text-slate-500 border-b border-slate-200">
+                            <th className="pb-3 font-medium">كود المنتج</th>
+                            <th className="pb-3 font-medium">الاسم</th>
+                            <th className="pb-3 font-medium text-center">الكمية</th>
+                            <th className="pb-3 font-medium text-center">السعر الأصلي</th>
+                            <th className="pb-3 font-medium text-center">الخصم</th>
+                            <th className="pb-3 font-medium text-left">الصافي</th>
+                            {isEditing && <th className="pb-3 font-medium">إجراء</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {(isEditing ? editItems : selectedOrder.items).map((item, idx) => (
+                            <tr key={item.id || idx} className="border-b border-slate-100 last:border-0">
+                              <td className="py-4 font-bold text-slate-800">{item.productCode}</td>
+                              <td className="py-4 text-slate-600">{item.productName}</td>
+                              <td className="py-4 text-slate-600 text-center">{item.quantity}</td>
+                              <td className="py-4 text-slate-600 text-center">
+                                {isEditing ? (
+                                  <input 
+                                    type="number" 
+                                    value={item.originalPrice}
+                                    onChange={(e) => {
+                                      const newPrice = parseFloat(e.target.value) || 0;
+                                      setEditItems(editItems.map(i => i.id === item.id ? { ...i, originalPrice: newPrice, finalPrice: (newPrice - (newPrice * (i.discountPercentage / 100))) * i.quantity } : i));
+                                    }}
+                                    className="w-20 p-1 border rounded text-center"
+                                  />
+                                ) : (
+                                  `${item.originalPrice} ج.م`
+                                )}
+                              </td>
+                              <td className="py-4 text-red-500 text-center">
+                                {isEditing ? (
+                                  <input 
+                                    type="number" 
+                                    value={item.discountPercentage}
+                                    onChange={(e) => {
+                                      const newDiscount = parseFloat(e.target.value) || 0;
+                                      setEditItems(editItems.map(i => i.id === item.id ? { ...i, discountPercentage: newDiscount, finalPrice: (i.originalPrice - (i.originalPrice * (newDiscount / 100))) * i.quantity } : i));
+                                    }}
+                                    className="w-16 p-1 border rounded text-center"
+                                  />
+                                ) : (
+                                  `${item.discountPercentage}%`
+                                )}
+                              </td>
+                              <td className="py-4 font-bold text-green-600 text-left">{item.finalPrice.toFixed(2)} ج.م</td>
+                              {isEditing && (
+                                <td className="py-4">
+                                  <button onClick={() => handleRemoveEditItem(item.id!)} className="text-red-500 hover:bg-red-50 p-1.5 rounded">
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden space-y-4">
+                      {(isEditing ? editItems : selectedOrder.items).map((item, idx) => (
+                        <div key={item.id || idx} className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="font-bold text-slate-800">{item.productCode}</span>
+                            <span className="font-bold text-green-600">{item.finalPrice.toFixed(2)} ج.م</span>
+                          </div>
+                          <p className="text-sm text-slate-600 mb-3">{item.productName}</p>
+                          <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
+                              <span className="text-slate-400 mb-1 font-medium italic">الكمية</span>
+                              <span className="font-bold text-slate-700">{item.quantity}</span>
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
+                              <span className="text-slate-400 mb-1 font-medium italic">السعر</span>
                               {isEditing ? (
                                 <input 
                                   type="number" 
@@ -381,13 +449,14 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
                                     const newPrice = parseFloat(e.target.value) || 0;
                                     setEditItems(editItems.map(i => i.id === item.id ? { ...i, originalPrice: newPrice, finalPrice: (newPrice - (newPrice * (i.discountPercentage / 100))) * i.quantity } : i));
                                   }}
-                                  className="w-20 p-1 border rounded text-center"
+                                  className="w-full p-1 border rounded text-center mt-1"
                                 />
                               ) : (
-                                `${item.originalPrice} ج.م`
+                                <span className="font-bold text-slate-700">{item.originalPrice}</span>
                               )}
-                            </td>
-                            <td className="py-4 text-red-500">
+                            </div>
+                            <div className="bg-white p-2 rounded-lg border border-slate-100 flex flex-col items-center">
+                              <span className="text-slate-400 mb-1 font-medium italic">الخصم</span>
                               {isEditing ? (
                                 <input 
                                   type="number" 
@@ -396,30 +465,29 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
                                     const newDiscount = parseFloat(e.target.value) || 0;
                                     setEditItems(editItems.map(i => i.id === item.id ? { ...i, discountPercentage: newDiscount, finalPrice: (i.originalPrice - (i.originalPrice * (newDiscount / 100))) * i.quantity } : i));
                                   }}
-                                  className="w-16 p-1 border rounded text-center"
+                                  className="w-full p-1 border rounded text-center mt-1"
                                 />
                               ) : (
-                                `${item.discountPercentage}%`
+                                <span className="font-bold text-red-500">{item.discountPercentage}%</span>
                               )}
-                            </td>
-                            <td className="py-4 font-bold text-green-600">{item.finalPrice.toFixed(2)} ج.م</td>
+                            </div>
                             {isEditing && (
-                              <td className="py-4">
-                                <button onClick={() => handleRemoveEditItem(item.id!)} className="text-red-500 hover:bg-red-50 p-1.5 rounded">
-                                  <Trash2 className="w-4 h-4" />
+                              <div className="bg-red-50 flex items-center justify-center rounded-lg">
+                                <button onClick={() => handleRemoveEditItem(item.id!)} className="text-red-500 p-2 w-full h-full flex items-center justify-center">
+                                  <Trash2 className="w-5 h-5" />
                                 </button>
-                              </td>
+                              </div>
                             )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
                     {isEditing && (
                       <div className="mt-4 flex justify-end">
                         <button 
                           onClick={handleSaveEdit}
-                          className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+                          className="w-full sm:w-auto bg-blue-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-700 transition shadow-sm"
                         >
                           حفظ التعديلات
                         </button>
@@ -428,14 +496,14 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
                   </div>
 
                   {/* Totals */}
-                  <div className="bg-slate-50 p-6 border-t border-slate-200">
-                    <div className="flex justify-between text-slate-600 mb-2">
+                  <div className="bg-slate-50 p-4 sm:p-6 border-t border-slate-200">
+                    <div className="flex justify-between text-slate-600 mb-2 text-sm sm:text-base">
                       <span>إجمالي السعر قبل الخصم:</span>
-                      <span className="font-medium text-lg">
+                      <span className="font-medium">
                         {(isEditing ? editItems : selectedOrder.items).reduce((sum, item) => sum + item.originalPrice * item.quantity, 0).toFixed(2)} ج.م
                       </span>
                     </div>
-                    <div className="flex justify-between text-slate-800 font-bold text-2xl mt-4 pt-4 border-t border-slate-200">
+                    <div className="flex justify-between text-slate-800 font-bold text-xl sm:text-2xl mt-4 pt-4 border-t border-slate-200">
                       <span>الصافي المطلوب:</span>
                       <span className="text-green-600">
                         {(isEditing ? editItems : selectedOrder.items).reduce((sum, item) => sum + item.finalPrice, 0).toFixed(2)} ج.م

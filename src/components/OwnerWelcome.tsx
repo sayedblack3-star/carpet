@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 
 interface OwnerWelcomeProps {
-  onDismiss: () => void;
+  onFinish: () => void;
 }
 
-const OwnerWelcome: React.FC<OwnerWelcomeProps> = ({ onDismiss }) => {
+const OwnerWelcome: React.FC<OwnerWelcomeProps> = ({ onFinish }) => {
   const [visible, setVisible] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
 
@@ -21,7 +21,7 @@ const OwnerWelcome: React.FC<OwnerWelcomeProps> = ({ onDismiss }) => {
 
   const handleDismiss = () => {
     setFadeOut(true);
-    setTimeout(() => onDismiss(), 700);
+    setTimeout(() => onFinish(), 700);
   };
 
   return (
