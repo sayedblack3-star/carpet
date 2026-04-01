@@ -16,6 +16,7 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
   const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || 'all');
   
   const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editItems, setEditItems] = useState<OrderItem[]>([]);
@@ -29,6 +30,7 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
     });
 
     const fetchOrders = async () => {
+      setLoading(true);
       let query = supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(100);
       
       if (userBranchId) {
@@ -54,13 +56,17 @@ export default function CashierView({ userBranchId, userRole }: CashierViewProps
       } else {
         toast.error("خطأ في جلب الطلبات");
       }
+      setLoading(false);
     };
 
     fetchOrders();
 
-    const channel = supabase.channel('cashier-orders')
+    const channel = supabase.channel('cashier-orders-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, payload => {
         fetchOrders();
+        if (payload.eventType === 'INSERT') {
+          toast.success('طلب جـديد وصـل الآن! 🔔', { duration: 5000 });
+        }
       })
       .subscribe();
 
