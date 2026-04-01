@@ -24,24 +24,17 @@ export default function ProductSearch() {
       }
 
       if (data) {
-        if (data.is_deleted) {
-          setProduct(null);
-          toast.error('هذا المنتج تمت أرشفته');
-        } else {
-          setProduct({ 
-            id: data.id, 
-            code: data.code,
-            name: data.name,
-            price: data.price_before,
-            price_before: data.price_before,
-            price_after: data.price_after,
-            discountPercentage: data.discount_percentage,
-            size: data.size,
-            inStock: data.in_stock,
-            quantity: data.quantity,
-            isDeleted: data.is_deleted
-          });
-        }
+        setProduct({ 
+          id: data.id, 
+          code: data.code,
+          name: data.name,
+          price_sell_before: data.price_sell_before,
+          price_sell_after: data.price_sell_after,
+          stock_quantity: data.stock_quantity,
+          min_stock_level: data.min_stock_level,
+          category: data.category,
+          is_active: data.is_active
+        });
       } else {
         setProduct(null);
       }
@@ -83,8 +76,8 @@ export default function ProductSearch() {
             <div className="space-y-3">
               <div className="flex justify-between items-start">
                 <h3 className="text-2xl font-bold text-slate-800">{product.name}</h3>
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${product.inStock !== false ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {product.inStock !== false ? 'متوفر' : 'غير متوفر'}
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${product.stock_quantity > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {product.stock_quantity > 0 ? 'متوفر' : 'غير متوفر'}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
@@ -94,27 +87,20 @@ export default function ProductSearch() {
                 </div>
                 <div>
                   <div className="text-sm text-slate-500">السعر الأساسي</div>
-                  <div className="font-bold text-lg text-blue-600">{product.price_before || product.price} ج.م</div>
+                  <div className="font-bold text-lg text-blue-600">{product.price_sell_before} ج.م</div>
                 </div>
-                {product.price_after ? (
+                {product.price_sell_after && product.price_sell_after < product.price_sell_before && (
                   <div className="col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100 flex justify-between items-center">
                     <span className="text-sm font-medium text-blue-800">السعر بعد الخصم:</span>
                     <span className="text-lg font-bold text-blue-600">
-                      {product.price_after} ج.م
+                      {product.price_sell_after} ج.م
                     </span>
                   </div>
-                ) : product.discountPercentage ? (
-                  <div className="col-span-2 bg-blue-50 p-3 rounded-lg border border-blue-100 flex justify-between items-center">
-                    <span className="text-sm font-medium text-blue-800">السعر بعد الخصم ({product.discountPercentage}%):</span>
-                    <span className="text-lg font-bold text-blue-600">
-                      {(product.price! - (product.price! * (product.discountPercentage / 100))).toFixed(2)} ج.م
-                    </span>
-                  </div>
-                ) : null}
-                {product.size && (
+                )}
+                {product.category && (
                   <div className="col-span-2">
-                    <div className="text-sm text-slate-500">المقاس</div>
-                    <div className="font-medium text-slate-800">{product.size}</div>
+                    <div className="text-sm text-slate-500">التصنيف</div>
+                    <div className="font-medium text-slate-800">{product.category}</div>
                   </div>
                 )}
               </div>

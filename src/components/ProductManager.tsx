@@ -12,6 +12,7 @@ export default function ProductManager() {
   
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sessionUser, setSessionUser] = useState<any>(null);
 
   const [formData, setFormData] = useState<Partial<Product>>({
     code: '',
@@ -26,9 +27,17 @@ export default function ProductManager() {
     is_active: true
   });
 
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSessionUser(data.session?.user));
+  }, []);
+
   const fetchProducts = async () => {
     setLoading(true);
-    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false });
     if (data) setProducts(data as Product[]);
     setLoading(false);
   };
@@ -45,11 +54,18 @@ export default function ProductManager() {
     e.preventDefault();
     try {
       if (isEditing && editingId) {
-        const { error } = await supabase.from('products').update(formData).eq('id', editingId);
+        const { error } = await supabase
+          .from('products')
+          .update({
+            ...formData,
+            updated_at: new Date().toISOString(),
+            updated_by: sessionUser?.id
+          })
+          .eq('id', editingId);
         if (error) throw error;
-        toast.success('تم تحديث بيانات المنتج بنجاح');
+        toast.success('تم تحديث المنتج بنجاح');
       } else {
-        const { error } = await supabase.from('products').insert([formData]);
+        const { error } = await supabase.from('products').insert([{ ...formData, created_by: sessionUser?.id }]);
         if (error) throw error;
         toast.success('تم إضافة المنتج الجديد للمخزن');
       }
@@ -67,9 +83,18 @@ export default function ProductManager() {
   };
 
   const deleteProduct = async (id: string) => {
-    if (!window.confirm('هل تريد أرشفة هذا المنتج؟ لن يظهر في لوحة البيع.')) return;
-    const { error } = await supabase.from('products').update({ is_active: false }).eq('id', id);
-    if (!error) toast.info('تمت أرشفة المنتج');
+    if (!window.confirm('هل أنت متأكد من أرشفة هذا المنتج؟ لن يظهر في القوائم النشطة.')) return;
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_deleted: true, updated_at: new Date().toISOString(), updated_by: sessionUser?.id })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success('تمت أرشفة المنتج بنجاح');
+      fetchProducts();
+    } catch (err) {
+      toast.error('حدث خطأ أثناء الأرشفة');
+    }
   };
 
   const filteredProducts = products.filter(p => 
@@ -209,7 +234,7 @@ export default function ProductManager() {
                    </div>
 
                    <div className="flex gap-2">
-                      <button onClick={() => setIsEditing(true) || setEditingId(product.id) || setFormData(product)} className="flex-1 bg-slate-50 hover:bg-orange-50 text-slate-400 hover:text-orange-500 py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm">
+                      <button onClick={() => { setIsEditing(true); setEditingId(product.id); setFormData(product); }} className="flex-1 bg-slate-50 hover:bg-orange-50 text-slate-400 hover:text-orange-500 py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm">
                         <Edit className="w-4 h-4" /> تعديل
                       </button>
                       <button onClick={() => deleteProduct(product.id)} className="p-3 bg-slate-50 text-slate-300 hover:bg-red-50 hover:text-red-500 rounded-xl transition-all">

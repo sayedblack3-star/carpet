@@ -1,18 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Toaster, toast } from 'sonner';
-import { 
-  TrendingUp, 
-  Package, 
-  Monitor, 
-  Smartphone, 
-  Shield, 
-  Activity, 
-  LogOut, 
-  WifiOff, 
-  ClipboardList,
-  ArrowLeft
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from './supabase';
+import { Profile, UserRole } from './types';
+import { Layout, Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Settings, Bell, Menu, X, ArrowLeft, Store as BranchIcon, UserCheck, ShieldCheck, Clock } from 'lucide-react';
+import { Toaster, toast } from 'sonner';
+
+// Components
 import UserManager from './components/UserManager';
 import ProductManager from './components/ProductManager';
 import DashboardView from './components/DashboardView';
@@ -23,67 +15,31 @@ import ShortagesView from './components/ShortagesView';
 import OwnerWelcome from './components/OwnerWelcome';
 import Login from './components/Login';
 
-const Logo = () => (
-    <svg viewBox="0 0 100 100" className="w-8 h-8 sm:w-10 sm:h-10" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M10 80C10 80 25 70 50 70C75 70 90 80 90 80V30C90 30 75 20 50 20C25 20 10 30 10 30V80Z" fill="url(#grad1)" stroke="#B45309" strokeWidth="2" />
-        <path d="M20 35C20 35 35 28 50 28C65 28 80 35 80 35" stroke="#F59E0B" strokeWidth="1" strokeDasharray="2 2" />
-        <path d="M20 75C20 75 35 68 50 68C65 68 80 75 80 75" stroke="#F59E0B" strokeWidth="1" strokeDasharray="2 2" />
-        <circle cx="50" cy="45" r="12" fill="#F59E0B" fillOpacity="0.2" stroke="#B45309" strokeWidth="1" />
-        <path d="M45 45L55 45M50 40L50 50" stroke="#B45309" strokeWidth="2" strokeLinecap="round" />
-        <defs>
-            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{ stopColor: '#FDE68A', stopOpacity: 1 }} />
-                <stop offset="100%" style={{ stopColor: '#D97706', stopOpacity: 1 }} />
-            </linearGradient>
-        </defs>
-    </svg>
-);
-
-function App() {
+const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [activeRole, setActiveRole] = useState<string | null>(null);
-  const [currentTab, setCurrentTab] = useState<'main' | 'shortages'>('main');
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [showSplash, setShowSplash] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const splashSeen = sessionStorage.getItem('splashSeen');
-    if (splashSeen) {
-        setShowSplash(false);
-    }
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
+      if (session) fetchProfile(session.user.id);
+      else setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
+      if (session) fetchProfile(session.user.id);
+      else {
         setProfile(null);
-        setActiveRole(null);
         setLoading(false);
       }
     });
 
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const fetchProfile = async (userId: string) => {
@@ -95,7 +51,11 @@ function App() {
         .maybeSingle();
       
       if (data) {
-        setProfile(data);
+        setProfile(data as Profile);
+        // Default tabs based on role
+        if (data.role === 'seller') setActiveTab('pos');
+        else if (data.role === 'cashier') setActiveTab('cashier');
+        else if (data.role === 'price_manager') setActiveTab('inventory');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -104,213 +64,228 @@ function App() {
     }
   };
 
-  const handleSplashFinish = () => {
-    setShowSplash(false);
-    sessionStorage.setItem('splashSeen', 'true');
-  };
+  const handleSplashFinish = () => setShowSplash(false);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem('branchId');
-    localStorage.removeItem('salespersonName');
+    toast.success('تم تسجيل الخروج بنجاح');
   };
 
-  const selectRole = (role: string) => {
-    setActiveRole(role);
-    setCurrentTab('main');
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 pharaonic-bg">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600 font-bold">جاري تحميل النظام...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) return <Login />;
 
   if (showSplash) {
     return <OwnerWelcome onFinish={handleSplashFinish} />;
   }
 
-  if (loading) {
+  // Mandatory Approval Check (Task 7)
+  if (profile && !profile.is_approved) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return <Login />;
-  }
-
-  const isMasterAdmin = session.user.email === 'sayedblack3@gmail.com' || session.user.email === 'admin@carpetland.com';
-  const roleFromProfile = profile?.role || 'salesperson';
-  const isApproved = profile?.is_approved || isMasterAdmin;
-  const isAdminUser = roleFromProfile === 'admin' || roleFromProfile === 'manager' || isMasterAdmin;
-  const userBranchId = profile?.branch_id;
-  const userName = profile?.full_name || session.user.email;
-
-  if (!isApproved) {
-    return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-center">
-        <div className="bg-white/10 backdrop-blur-xl p-10 rounded-[2rem] border border-white/5 max-w-md w-full shadow-2xl">
-          <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
-            <Shield className="w-10 h-10 animate-pulse" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-2">حسابك في انتظار المراجعة</h1>
-          <p className="text-slate-400 mb-8 leading-relaxed">
-            مرحباً بك في Carpet Land. حسابك قيد المراجعة حالياً من قبل الإدارة. يرجى التواصل مع المسؤول لتفعيل حسابك.
-          </p>
-          <button onClick={handleLogout} className="w-full bg-white/5 hover:bg-white/10 text-white font-bold py-4 rounded-2xl transition border border-white/10">
-            تسجيل الخروج
-          </button>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 pharaonic-bg p-4" dir="rtl">
+        <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border border-amber-100 text-center relative overflow-hidden">
+           <div className="absolute top-0 inset-x-0 h-2 bg-amber-500"></div>
+           <div className="w-20 h-20 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+             <Clock className="w-10 h-10 animate-pulse" />
+           </div>
+           <h1 className="text-2xl font-black text-slate-800 mb-4">حسابك قيد المراجعة</h1>
+           <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+             أهلاً بك يا <b>{profile.full_name}</b>. لقد تم تسجيل حسابك بنجاح، ولكن يجب على المدير العام تفعيل حسابك كـ <b>{profile.role}</b> قبل أن تتمكن من العمل.
+           </p>
+           <button 
+             onClick={handleLogout}
+             className="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-4 rounded-2xl transition flex items-center justify-center gap-2"
+           >
+             <LogOut className="w-5 h-5" /> تسجيل خروج
+           </button>
         </div>
       </div>
     );
   }
 
-  const effectiveRole = isAdminUser ? (activeRole || roleFromProfile) : roleFromProfile;
+  const role = profile?.role || 'seller';
 
-  if (isAdminUser && !activeRole) {
-    return (
-      <div className="min-h-screen pharaonic-bg p-4 sm:p-8" dir="rtl">
-        <Toaster position="top-center" richColors />
-        <div className="max-w-6xl mx-auto text-center">
-          <div className="flex flex-col items-center mb-12">
-            <div className="bg-white/80 backdrop-blur-md p-4 rounded-3xl shadow-xl border border-amber-200 mb-6">
-              <Logo />
-            </div>
-            <h1 className="text-4xl sm:text-5xl font-black text-amber-900 mb-4 tracking-tight">مرحباً بك في Carpet Land</h1>
-            <p className="text-amber-800/80 text-lg sm:text-xl font-medium">اختر الواجهة التي ترغب في الدخول إليها</p>
-          </div>
- 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full">
-            <button onClick={() => selectRole('admin')} className="group relative bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all text-right flex flex-col items-start hover:-translate-y-1">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                <Shield className="w-6 h-6 sm:w-8 sm:h-8" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">إدارة المستخدمين</h2>
-              <p className="text-sm sm:text-base text-slate-500">إدارة الحسابات والصلاحيات</p>
-            </button>
- 
-            <button onClick={() => selectRole('audit')} className="group relative bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all text-right flex flex-col items-start hover:-translate-y-1">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-teal-100 text-teal-600 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                <Activity className="w-6 h-6 sm:w-8 sm:h-8" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">سجل النشاطات</h2>
-              <p className="text-sm sm:text-base text-slate-500">تتبع جميع الإجراءات</p>
-            </button>
- 
-            <button onClick={() => selectRole('manager')} className="group relative bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all text-right flex flex-col items-start hover:-translate-y-1">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">لوحة الإدارة</h2>
-              <p className="text-sm sm:text-base text-slate-500">تقارير المبيعات والإحصائيات</p>
-            </button>
- 
-            <button onClick={() => selectRole('pricing')} className="group relative bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all text-right flex flex-col items-start hover:-translate-y-1">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                <Package className="w-6 h-6 sm:w-8 sm:h-8" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">مسؤول الأسعار</h2>
-              <p className="text-sm sm:text-base text-slate-500">إدارة المنتجات والمخزون</p>
-            </button>
- 
-            <button onClick={() => selectRole('cashier')} className="group relative bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all text-right flex flex-col items-start hover:-translate-y-1">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                <Monitor className="w-6 h-6 sm:w-8 sm:h-8" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">واجهة الكاشير</h2>
-              <p className="text-sm sm:text-base text-slate-500">تأكيد الطلبات وطباعة الفواتير</p>
-            </button>
- 
-            <button onClick={() => selectRole('salesperson')} className="group relative bg-white/90 backdrop-blur-sm p-6 sm:p-8 rounded-3xl border border-amber-100 shadow-sm hover:shadow-xl hover:border-amber-300 transition-all text-right flex flex-col items-start hover:-translate-y-1">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-sky-100 text-sky-600 rounded-2xl flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-sky-600 group-hover:text-white transition-colors">
-                <Smartphone className="w-6 h-6 sm:w-8 sm:h-8" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-bold text-slate-800 mb-2 sm:mb-3">واجهة البائع</h2>
-              <p className="text-sm sm:text-base text-slate-500">إنشاء ومتابعة طلبات المبيعات</p>
-            </button>
-          </div>
-  
-          <div className="mt-12">
-            <button 
-              onClick={handleLogout} 
-              className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-2xl bg-white/90 backdrop-blur-sm text-red-600 border border-red-100 shadow-sm hover:bg-red-50 font-bold transition-all"
-            >
-              <LogOut className="w-5 h-5" /> تسجيل الخروج
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Navigation Logic (Task 2)
+  const tabs = [
+    { id: 'dashboard', label: 'الإحصائيات', icon: BarChart3, roles: ['owner', 'branch_manager'] },
+    { id: 'pos', label: 'نظام البيع', icon: ShoppingCart, roles: ['owner', 'branch_manager', 'seller'] },
+    { id: 'cashier', label: 'نظام التحصيل', icon: Store, roles: ['owner', 'branch_manager', 'cashier'] },
+    { id: 'inventory', label: 'المخزن والأسعار', icon: Package, roles: ['owner', 'branch_manager', 'price_manager'] },
+    { id: 'shortages', label: 'النواقص', icon: ShieldAlert, roles: ['owner', 'branch_manager', 'seller', 'cashier'] },
+    { id: 'users', label: 'الموظفين والفروع', icon: Users, roles: ['owner'] },
+    { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['owner', 'branch_manager'] },
+  ];
+
+  const allowedTabs = tabs.filter(tab => tab.roles.includes(role));
+
+  const renderContent = () => {
+    // Direct Access Prevention
+    if (!allowedTabs.find(t => t.id === activeTab)) {
+      setActiveTab(allowedTabs[0]?.id || 'pos');
+    }
+
+    switch (activeTab) {
+      case 'dashboard': return <DashboardView userBranchId={profile?.branch_id} />;
+      case 'pos': return <SalespersonView />;
+      case 'cashier': return <CashierView />;
+      case 'inventory': return <ProductManager />;
+      case 'users': return <UserManager />;
+      case 'audit': return <AuditLogsView />;
+      case 'shortages': return <ShortagesView userName={profile?.full_name || ''} />;
+      default: return null;
+    }
+  };
 
   return (
-    <div className="min-h-screen font-sans bg-slate-50 pharaonic-bg" dir="rtl">
+    <div className="min-h-screen bg-slate-50 flex flex-col sm:flex-row overflow-hidden" dir="rtl">
       <Toaster position="top-center" richColors />
-      
-      <header className="bg-white/95 backdrop-blur-md border-b border-amber-100 h-16 flex items-center justify-between px-3 sm:px-6 sticky top-0 z-50 shadow-sm">
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <div className="bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 p-1 rounded-lg shadow-sm">
-            <Logo />
-          </div>
-          <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-l from-amber-700 to-amber-900 text-lg sm:text-xl hidden md:block">
-            Carpet Land
-          </span>
-          {isOffline && (
-            <div className="flex items-center gap-1 bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-              <WifiOff className="w-3 h-3" /> مقطوع
+
+      {/* Sidebar - Desktop */}
+      <aside className="hidden sm:flex flex-col w-72 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-2xl z-50">
+        <div className="p-8 border-b border-white/5 bg-white/5 backdrop-blur-md">
+           <div className="flex items-center gap-3">
+             <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+               <Store className="w-6 h-6 text-white" />
+             </div>
+             <div>
+               <h1 className="text-xl font-black tracking-wider">CARPET LAND</h1>
+               <span className="text-[10px] text-amber-500 font-black tracking-[2.5px] uppercase">ERP Suite v4.0</span>
+             </div>
+           </div>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto custom-scrollbar">
+          {allowedTabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold transition-all ${
+                activeTab === tab.id ? 'bg-amber-500 text-white shadow-xl shadow-amber-500/25 ring-1 ring-white/20' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+              }`}
+            >
+              <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-white' : 'text-slate-500'}`} />
+              <span className="text-sm">{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-white/5 space-y-4">
+           <div className="px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-black ring-2 ring-amber-500/30">
+                  {profile?.full_name?.[0] || 'U'}
+                </div>
+                <div className="overflow-hidden">
+                  <p className="text-xs font-black truncate">{profile?.full_name}</p>
+                  <p className="text-[10px] text-slate-500 font-bold truncate">{profile?.email}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 bg-amber-500/20 text-amber-500 rounded-md text-[9px] font-black uppercase">
+                  {profile?.role === 'owner' ? 'المالك' : 
+                   profile?.role === 'branch_manager' ? 'مدير فرع' : 
+                   profile?.role === 'seller' ? 'بائع' : 
+                   profile?.role === 'cashier' ? 'كاشير' : 'مسؤول الأسعار'}
+                </span>
+                <span className="px-2 py-0.5 bg-blue-500/20 text-blue-500 rounded-md text-[9px] font-black uppercase">
+                  ACTIVE
+                </span>
+              </div>
+           </div>
+           
+           <button
+             onClick={handleLogout}
+             className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-400/10 transition-all border border-transparent hover:border-red-400/20"
+           >
+             <LogOut className="w-5 h-5" />
+             <span className="text-sm">خروج آمن</span>
+           </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
+         {/* Top Header Mobile */}
+         <header className="sm:hidden bg-slate-900 text-white p-4 flex items-center justify-between shadow-lg z-50">
+            <div className="flex items-center gap-3">
+               <button onClick={() => setMobileMenuOpen(true)} className="p-2 bg-white/10 rounded-lg">
+                 <Menu className="w-6 h-6" />
+               </button>
+               <h1 className="text-lg font-black tracking-tight">Carpet Land</h1>
             </div>
-          )}
-        </div>
-        
-        <div className="flex items-center gap-1.5 sm:gap-4 overflow-hidden">
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg">
-            <button
-              onClick={() => setCurrentTab('main')}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-md transition-all ${currentTab === 'main' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600'}`}
-            >
-              الرئيسية
-            </button>
-            <button
-              onClick={() => setCurrentTab('shortages')}
-              className={`px-3 py-1.5 text-xs sm:text-sm font-bold rounded-md transition-all flex items-center gap-1.5 ${currentTab === 'shortages' ? 'bg-white text-red-600 shadow-sm' : 'text-slate-600'}`}
-            >
-              <ClipboardList className="w-4 h-4" /> <span className="hidden xs:inline">النواقص</span>
-            </button>
-          </div>
+            <div className="flex items-center gap-4">
+               <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center font-black text-xs">A</div>
+            </div>
+         </header>
 
-          {isAdminUser && (
-            <button 
-              onClick={() => { setActiveRole(null); setCurrentTab('main'); }}
-              className="flex items-center gap-1 text-[10px] sm:text-sm bg-amber-50 text-amber-700 px-3 py-1.5 rounded-lg font-bold border border-amber-200 whitespace-nowrap"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
-              <span className="hidden sm:inline">تبديل الواجهة</span>
-            </button>
-          )}
-          
-          <button 
-            onClick={handleLogout}
-            className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-colors shrink-0"
-            title="تسجيل الخروج"
-          >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
+         <div className="flex-1 overflow-y-auto bg-[#fafbfc] pharaonic-pattern">
+            {renderContent()}
+         </div>
 
-      <main className="h-[calc(100vh-64px)] overflow-y-auto">
-        {currentTab === 'shortages' ? (
-          <ShortagesView userBranchId={userBranchId} userName={userName} />
-        ) : (
-          <div className="h-full">
-            {effectiveRole === 'salesperson' && <SalespersonView userBranchId={userBranchId} />}
-            {effectiveRole === 'cashier' && <CashierView userBranchId={userBranchId} userRole={roleFromProfile} />}
-            {effectiveRole === 'manager' && <DashboardView userBranchId={userBranchId} />}
-            {effectiveRole === 'pricing' && <ProductManager />}
-            {effectiveRole === 'admin' && <UserManager />}
-            {effectiveRole === 'audit' && <AuditLogsView />}
-          </div>
-        )}
+         {/* Mobile Menu Overlay */}
+         {mobileMenuOpen && (
+           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] sm:hidden" onClick={() => setMobileMenuOpen(false)}>
+             <div className="w-80 h-full bg-slate-900 border-l border-white/5 p-6 animate-slide-left shadow-2xl" onClick={e => e.stopPropagation()}>
+               <div className="flex items-center justify-between mb-10">
+                 <h2 className="text-2xl font-black text-white">القائمة</h2>
+                 <button onClick={() => setMobileMenuOpen(false)} className="p-2 bg-white/10 rounded-xl text-white">
+                   <X className="w-6 h-6" />
+                 </button>
+               </div>
+               <nav className="space-y-2">
+                 {allowedTabs.map(tab => (
+                   <button
+                     key={tab.id}
+                     onClick={() => { setActiveTab(tab.id); setMobileMenuOpen(false); }}
+                     className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${
+                       activeTab === tab.id ? 'bg-amber-500 text-white shadow-xl shadow-amber-500/25' : 'text-slate-400 hover:bg-white/5'
+                     }`}
+                   >
+                     <tab.icon className="w-5 h-5" />
+                     {tab.label}
+                   </button>
+                 ))}
+               </nav>
+             </div>
+           </div>
+         )}
       </main>
+
+      <style>{`
+        .pharaonic-pattern {
+          background-image: 
+            radial-gradient(circle at 2px 2px, rgba(217,119,6,0.03) 1px, transparent 0);
+          background-size: 24px 24px;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(255,255,255,0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.1);
+          border-radius: 10px;
+        }
+        @keyframes slide-left {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+        .animate-slide-left {
+          animation: slide-left 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
-}
+};
 
 export default App;

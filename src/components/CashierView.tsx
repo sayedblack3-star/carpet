@@ -1,243 +1,391 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { Order, OrderItem, Branch } from '../types';
+import { Order, OrderItem, Branch, Profile } from '../types';
 import { format } from 'date-fns';
-import { Copy, CheckCircle, Clock, Trash2, Edit, X, ShoppingCart, Store, Printer, RotateCcw, ArrowLeft, Bell, BellRing, History } from 'lucide-react';
+import { 
+  Search, Printer, CheckCircle, Clock, Trash2, ShieldAlert, CreditCard, 
+  ChevronRight, AlertCircle, ShoppingCart, User, Store as BranchIcon, ArrowLeft, Filter, 
+  TrendingUp, Monitor, Edit2, Copy, X, RotateCcw, Bell, BellRing, History
+} from 'lucide-react';
 import { toast } from 'sonner';
 import ShiftManager from './ShiftManager';
 
-interface CashierViewProps {
-  userBranchId?: string | null;
-  userRole?: string;
-}
-
-export default function CashierView({ userBranchId, userRole }: CashierViewProps) {
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<string>(userBranchId || 'all');
+const CashierView: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [selectedOrderItems, setSelectedOrderItems] = useState<OrderItem[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeShift, setActiveShift] = useState<any>(null);
   const [sessionUser, setSessionUser] = useState<any>(null);
+  const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-        setSessionUser(session?.user);
+      if (session) {
+        setSessionUser(session.user);
+        fetchProfile(session.user.id);
+        checkShift(session.user.id);
+      }
     });
 
-    const fetchBranches = async () => {
-      const { data } = await supabase.from('branches').select('*');
-      if (data) setBranches(data);
+    const channel = supabase
+      .channel('cashier_orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    fetchBranches();
   }, []);
 
-  const fetchOrders = async () => {
-    setLoading(true);
-    let query = supabase.from('orders').select('*').order('created_at', { ascending: false }).limit(50);
-    if (selectedBranch !== 'all') {
-      query = query.eq('branch_id', selectedBranch);
+  const checkShift = async (userId: string) => {
+    const { data } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'active')
+      .maybeSingle();
+    setActiveShift(data);
+  };
+
+  const fetchProfile = async (id: string) => {
+    const { data } = await supabase.from('profiles').select('*').eq('id', id).single();
+    if (data) {
+      setCurrentProfile(data as Profile);
+      fetchOrders(data.branch_id);
     }
-    const { data } = await query;
+  };
+
+  const fetchOrders = async (branchId?: string | null) => {
+    const bid = branchId || currentProfile?.branch_id;
+    if (!bid) return;
+    
+    setLoading(true);
+    const { data } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('branch_id', bid)
+      .in('status', ['sent_to_cashier', 'under_review', 'confirmed'])
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
     if (data) setOrders(data as Order[]);
     setLoading(false);
   };
 
-  const fetchNotifications = async () => {
-    let query = supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(5);
-    if (userBranchId) query = query.eq('branch_id', userBranchId);
-    const { data } = await query;
-    if (data) setNotifications(data);
-  };
-
-  useEffect(() => {
-    fetchOrders();
-    fetchNotifications();
-
-    const orderChannel = supabase.channel('cashier-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
-        if (payload.new.branch_id === userBranchId || !userBranchId) {
-          toast.info(payload.new.title + ': ' + payload.new.message);
-          fetchNotifications();
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(orderChannel); };
-  }, [selectedBranch, userBranchId]);
-
-  const viewOrderDetails = async (order: Order) => {
-    setSelectedOrder(order);
-    const { data } = await supabase.from('order_items').select('*').eq('order_id', order.id);
-    if (data) setSelectedOrderItems(data as OrderItem[]);
+  const fetchOrderItems = async (orderId: string) => {
+    const { data } = await supabase.from('order_items').select('*').eq('order_id', orderId);
+    if (data) setOrderItems(data as OrderItem[]);
   };
 
   const markAsConfirmed = async (order: Order) => {
-    const { error } = await supabase.from('orders')
-      .update({ 
-        status: 'confirmed', 
-        cashier_id: sessionUser?.id, 
-        updated_at: new Date().toISOString() 
-      })
+    if (!activeShift) {
+       toast.error('يجب عليك بـدء وردية عمل أولاً قبل تحصيل الأموال');
+       return;
+    }
+
+    try {
+      // 1. Update Order Status (Task 4: confirmed)
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'confirmed', 
+          cashier_id: sessionUser?.id, 
+          confirmed_at: new Date().toISOString() 
+        })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      // 2. Notify Salesperson (Task 5)
+      await supabase.from('notifications').insert({
+        branch_id: currentProfile?.branch_id!,
+        sender_id: sessionUser?.id,
+        receiver_id: order.salesperson_id,
+        order_id: order.id,
+        title: 'تم تحصيل طلبك! ✅',
+        message: `تم دفع الفاتورة رقم ${order.order_number} بنجاح من قبل الكاشير`,
+        type: 'sale'
+      });
+
+      toast.success('تم تأكيد عملية البيع والتحصيل بنجاح');
+      setSelectedOrder(null);
+      fetchOrders();
+    } catch (err: any) {
+      toast.error('خطأ في التأكيد: ' + err.message);
+    }
+  };
+
+  const markAsReview = async (order: Order) => {
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'under_review' })
       .eq('id', order.id);
-
+    
     if (!error) {
-      toast.success('تم تأكيد الطلب وتحصيل المبلغ بنجاح ✅');
-      setSelectedOrder(null);
-      fetchOrders();
+       toast.warning('الطلب الآن تحت المراجعة والتعديل');
+       fetchOrders();
     }
   };
 
-  const cancelOrder = async (order: Order) => {
-    if (!window.confirm('هل أنت متأكد من إلغاء هذا الطلب؟')) return;
-    const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id);
-    if (!error) {
-      toast.error('تم إلغاء الطلب');
-      setSelectedOrder(null);
-      fetchOrders();
-    }
-  };
+  const filteredOrders = orders.filter(o => 
+    o.order_number.toString().includes(searchTerm) || 
+    o.salesperson_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="min-h-full pharaonic-bg p-4 sm:p-6" dir="rtl">
-      <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-            <Monitor className="w-8 h-8 text-emerald-600" /> واجهة الكاشير الذكية
-          </h1>
-          <p className="text-slate-500 font-medium mt-1">نظام ERP المتكامل لتحصيل المبيعات</p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4">
-           {notifications.length > 0 && (
-             <div className="bg-white/80 p-2 rounded-2xl border border-white flex items-center gap-3 px-4 shadow-sm">
-               <BellRing className="w-5 h-5 text-amber-500 animate-bounce" />
-               <span className="text-sm font-bold text-slate-600 line-clamp-1">{notifications[0].message}</span>
+    <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50" dir="rtl">
+      {/* Sidebar - Pending Orders */}
+      <div className="w-full lg:w-[450px] bg-white border-l border-slate-100 flex flex-col shadow-xl z-20">
+        <div className="p-8 border-b border-slate-50 space-y-6">
+           <div className="flex items-center gap-4">
+             <div className="w-14 h-14 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-2xl shadow-blue-500/30 ring-4 ring-blue-50">
+               <CreditCard className="w-8 h-8" />
              </div>
+             <div>
+               <h2 className="text-2xl font-black text-slate-800 tracking-tighter">صندوق المدفوعات</h2>
+               <p className="text-slate-400 text-xs font-black uppercase tracking-widest leading-none mt-1">المعاملات النشطة اليوم</p>
+             </div>
+           </div>
+
+           <div className="relative group">
+              <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+              <input
+                type="text"
+                placeholder="ابحث برقم الفاتورة أو البائع..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pr-12 pl-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-100 outline-none font-bold transition-all"
+              />
+           </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+           {!activeShift && (
+              <div className="mb-6 p-6 bg-red-50 border border-red-100 rounded-[2rem] text-center">
+                 <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
+                 <h4 className="text-red-700 font-black mb-1">الوردية مغلقة!</h4>
+                 <p className="text-red-500 text-xs font-bold leading-relaxed">يرجى بدء وردية كاشير لتمكين تحصيل الفواتير</p>
+              </div>
            )}
-           <select value={selectedBranch} onChange={e => setSelectedBranch(e.target.value)} className="bg-white px-5 py-3 rounded-2xl border border-slate-100 shadow-sm font-bold text-slate-700 outline-none">
-             <option value="all">كل الفروع</option>
-             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-           </select>
-        </div>
-      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8">
-          <div className="bg-white/80 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-white overflow-hidden">
-            <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-white/50">
-               <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                 <History className="w-6 h-6 text-emerald-500" /> قائمة الطلبات الأخيرة
-               </h2>
-               <button onClick={fetchOrders} className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400">
-                 <RotateCcw className="w-5 h-5" />
-               </button>
-            </div>
+           {loading ? (
+             <div className="flex flex-col items-center py-10 gap-3 opacity-20 animate-pulse">
+                <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
+                <span className="font-black text-slate-400">جاري التحديث...</span>
+             </div>
+           ) : (
+             filteredOrders.map(order => (
+               <div 
+                 key={order.id}
+                 onClick={() => { setSelectedOrder(order); fetchOrderItems(order.id); }}
+                 className={`group p-6 rounded-[2.5rem] border transition-all cursor-pointer relative overflow-hidden ${
+                   selectedOrder?.id === order.id 
+                   ? 'bg-blue-600 border-blue-600 shadow-2xl shadow-blue-500/30' 
+                   : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'
+                 }`}
+               >
+                 {selectedOrder?.id === order.id && (
+                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-bl-[4rem] -mr-8 -mt-8 rotate-12"></div>
+                 )}
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/50 text-slate-400 text-sm font-bold">
-                    <th className="p-6">رقم الطلب</th>
-                    <th className="p-6">الفرع</th>
-                    <th className="p-6">البائع</th>
-                    <th className="p-6">الإجمالي</th>
-                    <th className="p-6">الحالة</th>
-                    <th className="p-6 text-center">الإجراء</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {loading ? (
-                    <tr><td colSpan={6} className="p-12 text-center text-slate-300">جاري التحميل...</td></tr>
-                  ) : orders.length === 0 ? (
-                    <tr><td colSpan={6} className="p-12 text-center text-slate-300">لا توجد طلبات حالياً</td></tr>
-                  ) : (
-                    orders.map(order => (
-                      <tr key={order.id} className="hover:bg-emerald-50/30 transition-colors group">
-                        <td className="p-6 font-black text-slate-800">#{order.order_number}</td>
-                        <td className="p-6 text-slate-500 font-medium">{branches.find(b => b.id === order.branch_id)?.name}</td>
-                        <td className="p-6 font-bold text-slate-700">{(order as any).salesperson_name}</td>
-                        <td className="p-6 font-black text-emerald-600">{order.total_final_price} ج.م</td>
-                        <td className="p-6">
-                           <span className={`px-3 py-1 rounded-full text-[10px] font-bold ${
-                             order.status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
-                             order.status === 'sent' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
-                           }`}>
-                             {order.status === 'confirmed' ? 'مؤكد/مدفوع' : order.status === 'sent' ? 'بانتظار التحصيل' : 'ملغي'}
-                           </span>
-                        </td>
-                        <td className="p-6 text-center">
-                           <button onClick={() => viewOrderDetails(order)} className="bg-white px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:border-emerald-500 hover:text-emerald-600 transition-all shadow-sm">عرض التفاصيل</button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-4">
-          <div className="bg-white/80 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-white p-8 sticky top-24 min-h-[600px] flex flex-col">
-            {selectedOrder ? (
-              <div className="animate-in fade-in slide-in-from-right-4 duration-300 flex flex-col h-full">
-                <div className="flex justify-between items-start mb-8">
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-800">تفاصيل الطلب</h3>
-                    <p className="text-slate-400 font-bold mt-1">#{selectedOrder.order_number}</p>
-                  </div>
-                  <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-300">
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-
-                <div className="flex-1 space-y-4 mb-8 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
-                  {selectedOrderItems.map(item => (
-                    <div key={item.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <h4 className="font-bold text-slate-800 mb-1">{item.product_name}</h4>
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-slate-400">الكمية: <b className="text-slate-800">{item.quantity}</b></span>
-                        <span className="font-black text-slate-700">{item.total_price} ج.م</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-auto border-t-2 border-slate-100 pt-6 space-y-6">
-                   <div className="flex justify-between items-center bg-emerald-50 p-6 rounded-3xl border border-emerald-100">
-                     <span className="text-emerald-700 font-bold">المبلغ المطلوب تحصيله:</span>
-                     <span className="text-3xl font-black text-emerald-800">{selectedOrder.total_final_price} ج.م</span>
+                 <div className="flex justify-between items-start mb-4 relative z-10">
+                   <div>
+                     <h4 className={`text-xl font-black ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>
+                       #{order.order_number}
+                     </h4>
+                     <p className={`text-xs font-bold ${selectedOrder?.id === order.id ? 'text-blue-100' : 'text-slate-400'}`}>
+                       {format(new Date(order.created_at), 'hh:mm a')} • {order.salesperson_name}
+                     </p>
                    </div>
+                   <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest ${
+                     order.status === 'confirmed' ? 'bg-emerald-500 text-white' : 
+                     order.status === 'under_review' ? 'bg-amber-500 text-white' :
+                     selectedOrder?.id === order.id ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'
+                   }`}>
+                     {order.status === 'confirmed' ? 'محتمل' : 
+                      order.status === 'under_review' ? 'مراجعة' : 'جاهز'}
+                   </span>
+                 </div>
 
-                   {selectedOrder.status === 'sent' && (
-                     <div className="flex gap-4">
-                       <button onClick={() => markAsConfirmed(selectedOrder)} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-5 rounded-[2rem] shadow-xl shadow-emerald-200 transition-all flex items-center justify-center gap-2">
-                         <CheckCircle className="w-6 h-6" /> تأكيد التحصيل
-                       </button>
-                       <button onClick={() => cancelOrder(selectedOrder)} className="p-5 bg-red-50 text-red-400 hover:bg-red-100 hover:text-red-600 rounded-[2rem] transition-all">
-                         <Trash2 className="w-6 h-6" />
-                       </button>
-                     </div>
-                   )}
-                   
-                   <button className="w-full flex items-center justify-center gap-2 text-slate-400 font-bold hover:text-blue-500 transition-colors">
-                     <Printer className="w-5 h-5" /> طباعة إيصال تجريبي
-                   </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-slate-300 py-20">
-                <ShoppingCart className="w-24 h-24 mb-6 opacity-20" />
-                <p className="font-black text-lg text-center">اختر فاتورة من القائمة<br/><span className="text-sm font-medium">لعرض التفاصيل وتحصيل المبلغ</span></p>
-              </div>
-            )}
-          </div>
+                 <div className="flex items-end justify-between relative z-10">
+                    <span className={`text-2xl font-black tracking-tighter ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>
+                      {order.total_final_price} <small className="text-[10px] uppercase font-black opacity-60">ج.م</small>
+                    </span>
+                    <button className={`p-3 rounded-xl transition-all ${
+                      selectedOrder?.id === order.id ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-50 text-slate-400'
+                    }`}>
+                      <ChevronRight className={`w-6 h-6 transition-transform ${selectedOrder?.id === order.id ? 'rotate-180' : ''}`} />
+                    </button>
+                 </div>
+               </div>
+             ))
+           )}
+        </div>
+
+        <div className="p-6 border-t border-slate-50">
+           <ShiftManager userId={sessionUser?.id} branchId={currentProfile?.branch_id || ''} />
         </div>
       </div>
-      <ShiftManager userId={sessionUser?.id} branchId={userBranchId || ''} />
+
+      {/* Detail Panel */}
+      <div className="flex-1 overflow-y-auto p-8 lg:p-12 pharaonic-pattern scroll-smooth custom-scrollbar">
+         {selectedOrder ? (
+           <div className="max-w-4xl mx-auto space-y-10 animate-fade-up">
+              {/* Header Card */}
+              <div className="bg-white rounded-[3.5rem] p-10 border border-slate-100 shadow-2xl relative overflow-hidden group">
+                 <div className="absolute top-0 left-0 w-4 h-full bg-blue-500"></div>
+                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+                    <div className="flex items-center gap-6">
+                       <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform duration-500 shadow-slate-900/30">
+                          <Monitor className="w-10 h-10 text-amber-500" />
+                       </div>
+                       <div>
+                          <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1 leading-none">تفاصيل الفاتورة الإلكترونية</p>
+                          <h1 className="text-3xl font-black text-slate-800 tracking-tighter">ORDER NO: {selectedOrder.order_number}</h1>
+                       </div>
+                    </div>
+                    <div className="flex gap-4">
+                       <button className="px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black flex items-center gap-2 transition-all">
+                          <Printer className="w-5 h-5" /> طباعة
+                       </button>
+                       <button onClick={() => setSelectedOrder(null)} className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition-all">
+                          <X className="w-6 h-6" />
+                       </button>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-10 p-8 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50">
+                    <div className="space-y-1">
+                       <p className="text-slate-400 text-[10px] font-black uppercase">البائع</p>
+                       <p className="font-black text-slate-800 text-sm flex items-center gap-2"><User className="w-3 h-3 text-blue-500" /> {selectedOrder.salesperson_name}</p>
+                    </div>
+                    <div className="space-y-1">
+                       <p className="text-slate-400 text-[10px] font-black uppercase">رقم الوردية</p>
+                       <p className="font-black text-slate-800 text-sm">#SHT-102</p>
+                    </div>
+                    <div className="space-y-1">
+                       <p className="text-slate-400 text-[10px] font-black uppercase">الحالة</p>
+                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-600 rounded-lg text-[10px] font-black">
+                          <Clock className="w-3 h-3" /> {selectedOrder.status === 'sent_to_cashier' ? 'بانتظار التحصيل' : 'تحت المراجعة'}
+                       </span>
+                    </div>
+                    <div className="space-y-1">
+                       <p className="text-slate-400 text-[10px] font-black uppercase">توقيت الإنشاء</p>
+                       <p className="font-black text-slate-800 text-sm">{format(new Date(selectedOrder.created_at), 'hh:mm:ss a')}</p>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden">
+                 <div className="p-8 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="font-black text-slate-800 flex items-center gap-3">
+                       <ShoppingCart className="w-5 h-5 text-blue-500" /> قائمة محتويات الفاتورة
+                    </h3>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{orderItems.length} صنف</span>
+                 </div>
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-right border-collapse">
+                       <thead>
+                          <tr className="border-b border-slate-50">
+                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">الصنف والوصف</th>
+                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">السعر</th>
+                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">الكمية</th>
+                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">الإجمالي</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-50">
+                          {orderItems.map(item => (
+                             <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
+                                <td className="px-8 py-6">
+                                   <p className="font-black text-slate-800 mb-0.5 group-hover:text-blue-600 transition-colors">{item.product_name}</p>
+                                   <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-black">ID: {item.product_id.split('-')[0]}</span>
+                                </td>
+                                <td className="px-8 py-6 font-black text-slate-700">{item.unit_price} ج.م</td>
+                                <td className="px-8 py-6">
+                                   <span className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-slate-800">{item.quantity}</span>
+                                </td>
+                                <td className="px-8 py-6">
+                                   <span className="font-black text-lg text-slate-900">{item.total_price} ج.م</span>
+                                </td>
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </div>
+
+                 {/* Action Bar */}
+                 <div className="p-10 bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div>
+                       <p className="text-white/40 text-xs font-black uppercase tracking-widest mb-2">إجمالي المبلغ المطلوب تحصيله</p>
+                       <div className="flex items-end gap-3">
+                          <span className="text-5xl font-black tracking-tighter text-amber-500">{selectedOrder.total_final_price}</span>
+                          <span className="text-xl font-black text-white/60 mb-2">جنيه مصري</span>
+                       </div>
+                    </div>
+
+                    <div className="flex gap-4 w-full md:w-auto">
+                       {selectedOrder.status !== 'confirmed' && (
+                         <>
+                            <button 
+                              onClick={() => markAsReview(selectedOrder)}
+                              className="flex-1 md:flex-none px-8 py-5 bg-white/10 hover:bg-white/20 text-white rounded-3xl font-black flex items-center justify-center gap-3 transition-all border border-white/10"
+                            >
+                               <Edit2 className="w-6 h-6" /> مراجعة و تعديل
+                            </button>
+                            <button
+                              onClick={() => markAsConfirmed(selectedOrder)}
+                              className="flex-1 md:flex-none px-12 py-5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-3xl font-black flex items-center justify-center gap-3 transition-all shadow-xl shadow-amber-500/20 active:scale-95"
+                            >
+                               <CheckCircle className="w-6 h-6" /> تأكيد التحصيل
+                            </button>
+                         </>
+                       )}
+                    </div>
+                 </div>
+              </div>
+           </div>
+         ) : (
+           <div className="h-full flex flex-col items-center justify-center text-center opacity-30 select-none">
+              <div className="w-40 h-40 bg-white rounded-[4rem] flex items-center justify-center mb-8 shadow-2xl relative">
+                 <div className="absolute inset-0 border-4 border-dashed border-slate-200 rounded-[4rem] animate-spin-slow"></div>
+                 <ShoppingCart className="w-20 h-20 text-slate-200" />
+              </div>
+              <h2 className="text-4xl font-black text-slate-800 mb-4">في انتظار العمليات</h2>
+              <p className="text-slate-400 font-medium text-lg max-w-md leading-relaxed">
+                 اختر أحد الطلبات المعلقة من القائمة الجانبية لمباشرة عملية مراجعتها وتحصيل الأموال.
+              </p>
+           </div>
+         )}
+      </div>
+
+      <style>{`
+        .pharaonic-pattern {
+          background-image: 
+            radial-gradient(circle at 2px 2px, rgba(0,0,0,0.03) 1px, transparent 0);
+          background-size: 24px 24px;
+        }
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        .animate-spin-slow {
+          animation: spin-slow 12s linear infinite;
+        }
+        @keyframes fade-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-up {
+          animation: fade-up 0.5s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
-}
+};
+
+export default CashierView;
