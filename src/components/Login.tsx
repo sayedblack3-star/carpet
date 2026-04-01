@@ -30,25 +30,48 @@ export default function Login() {
         .maybeSingle();
 
       if (!profile) {
-        // Force create profile for the user
-        const { error: insertError } = await supabase
+        // Try finding by email instead (in case ID changed)
+        const { data: profileByEmail } = await supabase
           .from('profiles')
-          .insert({
-            id: user.id,
-            email: user.email,
-            full_name: user.email?.split('@')[0] || 'User',
-            role: 'admin', // Auto-promote to admin for this high-level fix
-            is_approved: true,
-            is_active: true
-          });
-        
-        if (insertError) {
-          console.error('Auto-heal failed:', insertError);
-          toast.warning('تم الدخول بنجاح ولكن فشل إنشاء البروفايل آلياً');
+          .select('*')
+          .eq('email', user.email)
+          .maybeSingle();
+
+        if (profileByEmail) {
+          // Fix identity mismatch: Update the ID to the current auth ID
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ id: user.id, role: 'admin', is_approved: true, is_active: true })
+            .eq('email', user.email);
+          
+          if (!updateError) {
+             toast.success('تمت مزامنة هويتك بنجاح');
+          }
         } else {
-          toast.success('تم إنشاء بروفايلك الآلي برتبة أدمن');
+          // Truly missing: Force create profile for the user
+          const { error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email: user.email,
+              full_name: user.email?.split('@')[0] || 'User',
+              role: 'admin',
+              is_approved: true,
+              is_active: true
+            });
+          
+          if (insertError) {
+            console.error('Auto-heal failed:', insertError);
+            toast.warning('تم الدخول بنجاح ولكن فشل إنشاء البروفايل آلياً');
+          } else {
+            toast.success('تم إنشاء بروفايلك الآلي برتبة أدمن');
+          }
         }
       } else {
+        // Ensure they are admin if they logged in
+        if (profile.role !== 'admin') {
+           await supabase.from('profiles').update({ role: 'admin' }).eq('id', user.id);
+        }
         toast.success(`مرحباً بك مجدداً، ${profile.full_name || 'أدمن'}`);
       }
     }
