@@ -59,6 +59,7 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
+      toast.error('خطأ في تحميل بيانات الملف الشخصي');
     } finally {
       setLoading(false);
     }
@@ -83,6 +84,29 @@ const App: React.FC = () => {
   }
 
   if (!session) return <Login />;
+  
+  if (!profile && !loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 pharaonic-bg p-4" dir="rtl">
+        <div className="max-w-md w-full bg-white p-10 rounded-[3rem] shadow-2xl border border-red-100 text-center relative overflow-hidden">
+           <div className="absolute top-0 inset-x-0 h-2 bg-red-500"></div>
+           <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+             <ShieldAlert className="w-10 h-10" />
+           </div>
+           <h1 className="text-2xl font-black text-slate-800 mb-4">الملف الشخصي غير مفقود</h1>
+           <p className="text-slate-500 font-medium mb-8 leading-relaxed">
+             نعتذر منك. لقد تم تسجيل دخولك ولكن لم يتم العثور على ملفك الشخصي في قاعدة البيانات. برجاء التواصل مع الإدارة.
+           </p>
+           <button 
+             onClick={handleLogout}
+             className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-2"
+           >
+             <LogOut className="w-5 h-5" /> تسجيل خروج
+           </button>
+        </div>
+      </div>
+    );
+  }
 
   if (showSplash) {
     return <OwnerWelcome onFinish={handleSplashFinish} />;
