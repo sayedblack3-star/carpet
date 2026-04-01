@@ -103,7 +103,9 @@ function App() {
     return <Login />;
   }
 
-  const isAdmin = user.user_metadata?.role === 'admin' || user.email === 'sayedblack3@gmail.com';
+  const isAdmin = user.user_metadata?.role === 'admin' || 
+                  user.email === 'sayedblack3@gmail.com' || 
+                  user.email === 'admin@carpetland.com';
   const userBranchId = user.user_metadata?.branch_id;
 
   const handleLogout = async () => {
