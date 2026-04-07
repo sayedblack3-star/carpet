@@ -9,20 +9,38 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+  e.preventDefault();
+  setLoading(true);
+
+  try {
+    console.log('Login clicked:', email);
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    console.log('LOGIN RESPONSE:', { data, error });
+
     if (error) {
-      if (error.message.includes('Invalid login')) {
-        toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
-      } else {
-        toast.error(error.message);
-      }
-    } else {
-      toast.success('مرحباً بك في أرض السجاد');
+      toast.error(error.message || 'فشل تسجيل الدخول');
+      return;
     }
+
+    if (!data?.user) {
+      toast.error('لم يتم تسجيل الدخول بشكل صحيح');
+      return;
+    }
+
+    toast.success('تم تسجيل الدخول بنجاح');
+
+  } catch (err: any) {
+    console.error('LOGIN ERROR:', err);
+    toast.error(err.message || 'خطأ غير متوقع');
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#0a0a0f] p-6" dir="rtl">
