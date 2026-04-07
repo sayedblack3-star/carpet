@@ -28,7 +28,7 @@ const TABS = [
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 12000;
 const AUTH_BOOTSTRAP_TIMEOUT_MESSAGE = 'Timed out while restoring the current session.';
-const PROFILE_LOAD_TIMEOUT_MS = 8000;
+const PROFILE_LOAD_TIMEOUT_MS = 20000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -86,6 +86,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const authStateHandledRef = useRef(false);
+  const profileRef = useRef<Profile | null>(null);
 
   const role = profile?.role || 'seller';
   const allowedTabs = useMemo(() => TABS.filter((tab) => tab.roles.includes(role as UserRole)), [role]);
@@ -103,19 +104,38 @@ const App: React.FC = () => {
   });
 
   useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (!isMounted) return;
 
       authStateHandledRef.current = true;
       setSession(nextSession);
 
       if (nextSession) {
-        setLoading(true);
-        await fetchProfile(nextSession.user);
+        const currentProfile = profileRef.current;
+        const shouldRefreshProfile =
+          !currentProfile ||
+          currentProfile.id !== nextSession.user.id ||
+          event === 'SIGNED_IN' ||
+          event === 'USER_UPDATED';
+
+        if (shouldRefreshProfile) {
+          if (!currentProfile || currentProfile.id !== nextSession.user.id) {
+            setLoading(true);
+          }
+
+          await fetchProfile(nextSession.user, { preserveCurrentProfileOnTimeout: true });
+        } else {
+          setLoading(false);
+        }
+
         void fetchBranches();
       } else {
         setProfile(null);
@@ -188,9 +208,13 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchProfile = async (user: { id: string; email?: string | null }) => {
+  const fetchProfile = async (
+    user: { id: string; email?: string | null },
+    options: { preserveCurrentProfileOnTimeout?: boolean } = {}
+  ) => {
     const email = user.email || '';
     const adminUser = isAdminEmail(email);
+    const currentProfile = profileRef.current;
 
     try {
       const { data, error } = await withTimeout(
@@ -228,8 +252,21 @@ const App: React.FC = () => {
 
       setProfile(data as Profile);
     } catch (err: any) {
+      const isProfileTimeout = err instanceof Error && err.message === PROFILE_LOAD_TIMEOUT_MESSAGE;
+
       if (adminUser) {
         setProfile(buildFallbackProfile(user.id, email));
+        return;
+      }
+
+      if (
+        isProfileTimeout &&
+        options.preserveCurrentProfileOnTimeout &&
+        currentProfile &&
+        currentProfile.id === user.id
+      ) {
+        console.warn('Profile refresh timed out, keeping cached profile.', err);
+        setProfile(currentProfile);
         return;
       }
 
