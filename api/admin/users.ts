@@ -130,10 +130,11 @@ export default async function handler(request: Request) {
       return json({ error: 'Only active approved admins can create users.' }, 403);
     }
 
-    const { error: branchFeatureError } = await adminClient.from('branches').select('id').limit(1);
+    const { error: branchFeatureError } = await actorClient.from('branches').select('id').limit(1);
     const branchFeatureEnabled = !branchFeatureError;
 
     if (branchFeatureError && !isMissingRelationError(branchFeatureError.message)) {
+      console.error('Branch feature verification failed:', branchFeatureError.message);
       return json({ error: 'Unable to validate branch assignments.' }, 500);
     }
 
@@ -143,7 +144,7 @@ export default async function handler(request: Request) {
         return json({ error: 'A branch is required for seller and cashier accounts.' }, 400);
       }
 
-      const { data: branch, error: branchError } = await adminClient
+      const { data: branch, error: branchError } = await actorClient
         .from('branches')
         .select('id, is_active')
         .eq('id', branchId)
