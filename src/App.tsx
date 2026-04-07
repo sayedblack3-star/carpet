@@ -176,7 +176,7 @@ const App: React.FC = () => {
             setLoading(true);
           }
 
-          await fetchProfile(nextSession.user, { preserveCurrentProfileOnTimeout: true });
+          await fetchProfile(nextSession.user);
         } else {
           setLoading(false);
         }
@@ -253,10 +253,7 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchProfile = async (
-    user: { id: string; email?: string | null },
-    options: { preserveCurrentProfileOnTimeout?: boolean } = {}
-  ) => {
+  const fetchProfile = async (user: { id: string; email?: string | null }) => {
     const email = user.email || '';
     const adminUser = isAdminEmail(email);
     const currentProfile = profileRef.current;
@@ -306,14 +303,11 @@ const App: React.FC = () => {
       }
 
       if (isProfileTimeout && cachedProfile && cachedProfile.id === user.id) {
-        console.warn('Profile refresh timed out, keeping cached profile.');
         setProfile(cachedProfile);
         return;
       }
 
-      if (isProfileTimeout) {
-        console.warn('Profile fetch timed out without cached profile.');
-      } else {
+      if (!isProfileTimeout) {
         console.error('Error fetching profile:', err);
       }
 
