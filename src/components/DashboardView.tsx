@@ -6,6 +6,7 @@ import { TrendingUp, Users, DollarSign, Package, ShoppingCart, AlertCircle, Cloc
 import { subDays, startOfDay, format } from 'date-fns';
 
 const QUERY_TIMEOUT_MS = 6000;
+const QUERY_RETRY_DELAY_MS = 700;
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -22,15 +23,43 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
   }
 };
 
+const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+const isTransientNetworkError = (error: unknown) => {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('networkerror') ||
+    message.includes('load failed') ||
+    message.includes('fetch') ||
+    message.includes('timeout')
+  );
+};
+
+const queryWithRetry = async <T,>(runQuery: () => Promise<T>, retries = 1): Promise<T> => {
+  try {
+    return await withTimeout(runQuery(), QUERY_TIMEOUT_MS);
+  } catch (error) {
+    if (retries <= 0 || !isTransientNetworkError(error)) {
+      throw error;
+    }
+
+    await delay(QUERY_RETRY_DELAY_MS);
+    return queryWithRetry(runQuery, retries - 1);
+  }
+};
+
 const DashboardView: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('month');
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadError(null);
 
     let ordersQuery = supabase.from('orders').select('*');
     const now = new Date();
@@ -44,26 +73,31 @@ const DashboardView: React.FC = () => {
     }
 
     const [ordersResult, productsResult, usersResult] = await Promise.allSettled([
-      withTimeout(Promise.resolve(ordersQuery.order('created_at', { ascending: false })), QUERY_TIMEOUT_MS),
-      withTimeout(Promise.resolve(supabase.from('products').select('*').eq('is_deleted', false)), QUERY_TIMEOUT_MS),
-      withTimeout(Promise.resolve(supabase.from('profiles').select('*')), QUERY_TIMEOUT_MS),
+      queryWithRetry(() => Promise.resolve(ordersQuery.order('created_at', { ascending: false }))),
+      queryWithRetry(() => Promise.resolve(supabase.from('products').select('*').eq('is_deleted', false))),
+      queryWithRetry(() => Promise.resolve(supabase.from('profiles').select('*'))),
     ]);
+
+    const failedResults = [ordersResult, productsResult, usersResult].filter((result) => result.status === 'rejected');
+    if (failedResults.length > 0) {
+      setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. تم الاحتفاظ بالعرض وسيتم إعادة المحاولة تلقائيًا.');
+    }
 
     if (ordersResult.status === 'fulfilled' && !ordersResult.value.error) {
       setOrders((ordersResult.value.data || []) as Order[]);
-    } else {
+    } else if (orders.length === 0) {
       setOrders([]);
     }
 
     if (productsResult.status === 'fulfilled' && !productsResult.value.error) {
       setProducts((productsResult.value.data || []) as Product[]);
-    } else {
+    } else if (products.length === 0) {
       setProducts([]);
     }
 
     if (usersResult.status === 'fulfilled' && !usersResult.value.error) {
       setUsers((usersResult.value.data || []) as Profile[]);
-    } else {
+    } else if (users.length === 0) {
       setUsers([]);
     }
 
@@ -137,6 +171,12 @@ const DashboardView: React.FC = () => {
           ))}
         </div>
       </header>
+
+      {loadError && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          {loadError}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
