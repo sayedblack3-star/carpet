@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
+import { logAction } from '../lib/logger';
 
 type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
 
@@ -105,6 +106,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     if (selectedOrder?.id === orderId && selectedOrder.status !== 'confirmed') {
       setSelectedOrder({ ...selectedOrder, status: 'under_review' });
     }
+    await logAction('order_marked_under_review', { order_id: orderId }, branchId || undefined);
     fetchOrders();
   };
 
@@ -128,6 +130,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
       await markOrderAsUnderReview(selectedOrder.id);
       await fetchOrderItems(selectedOrder.id);
       await recalcOrderTotal(selectedOrder.id);
+      await logAction('order_item_quantity_updated', { order_id: selectedOrder.id, item_id: itemId, quantity: newQty }, branchId || undefined);
       toast.success('تم تحديث الكمية');
     }
   };
@@ -140,6 +143,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
       await markOrderAsUnderReview(selectedOrder.id);
       await fetchOrderItems(selectedOrder.id);
       await recalcOrderTotal(selectedOrder.id);
+      await logAction('order_item_deleted', { order_id: selectedOrder.id, item_id: itemId }, branchId || undefined);
       toast.success('تم حذف الصنف');
     }
   };
@@ -171,6 +175,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
       await fetchOrderItems(selectedOrder.id);
       await recalcOrderTotal(selectedOrder.id);
       setProductSearch('');
+      await logAction('order_item_added', { order_id: selectedOrder.id, product_id: product.id, product_name: product.name }, branchId || undefined);
       toast.success('تمت إضافة الصنف إلى الفاتورة');
     }
   };
@@ -204,6 +209,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
       if (error) throw error;
 
+      await logAction('order_confirmed', { order_id: order.id, order_number: order.order_number, cashier_id: sessionUser?.id }, branchId || undefined);
       toast.success('تم تأكيد التحصيل بنجاح');
       setSelectedOrder(null);
       fetchOrders();
@@ -215,6 +221,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const cancelOrder = async (order: Order) => {
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id);
     if (!error) {
+      await logAction('order_cancelled', { order_id: order.id, order_number: order.order_number }, branchId || undefined);
       toast.warning('تم إلغاء الطلب');
       setSelectedOrder(null);
       fetchOrders();

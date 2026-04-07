@@ -4,6 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import { Branch, Profile, UserRole } from '../types';
 import { Users, Edit2, Shield, X, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2, UserPlus, Lock, Eye, EyeOff, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { logAction } from '../lib/logger';
+import { normalizeEmail, normalizeText, validateEmail, validateStrongPassword } from '../lib/security';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'مدير عام',
@@ -77,8 +79,17 @@ const UserManager: React.FC = () => {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!newEmail || !newPassword || !newName) {
+    const cleanEmail = normalizeEmail(newEmail);
+    const cleanName = normalizeText(newName);
+
+    if (!cleanEmail || !newPassword || !cleanName) {
       toast.error('يرجى ملء جميع الحقول');
+      return;
+    }
+
+    const emailError = validateEmail(cleanEmail);
+    if (emailError) {
+      toast.error(emailError);
       return;
     }
 
@@ -87,8 +98,9 @@ const UserManager: React.FC = () => {
       return;
     }
 
-    if (newPassword.length < 6) {
-      toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+    const passwordError = validateStrongPassword(newPassword);
+    if (passwordError) {
+      toast.error(passwordError);
       return;
     }
 
@@ -99,9 +111,9 @@ const UserManager: React.FC = () => {
       });
 
       const { data, error } = await tempClient.auth.signUp({
-        email: newEmail,
+        email: cleanEmail,
         password: newPassword,
-        options: { data: { full_name: newName } },
+        options: { data: { full_name: cleanName } },
       });
 
       if (error) throw error;
@@ -109,9 +121,9 @@ const UserManager: React.FC = () => {
 
       const payload: Record<string, any> = {
         role: newRole,
-        is_approved: true,
+        is_approved: false,
         is_active: true,
-        full_name: newName,
+        full_name: cleanName,
       };
 
       if (branchFeatureEnabled) {
@@ -123,16 +135,24 @@ const UserManager: React.FC = () => {
       if (profileErr) {
         await supabase.from('profiles').upsert({
           id: data.user.id,
-          email: newEmail,
-          full_name: newName,
+          email: cleanEmail,
+          full_name: cleanName,
           role: newRole,
           branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
-          is_approved: true,
+          is_approved: false,
           is_active: true,
         });
       }
 
-      toast.success(`تم إنشاء حساب ${newName} بنجاح`);
+      await logAction('user_created', {
+        email: cleanEmail,
+        full_name: cleanName,
+        role: newRole,
+        branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
+        requires_approval: true,
+      });
+
+      toast.success(`تم إنشاء حساب ${cleanName} وبانتظار التفعيل`);
       setShowCreateModal(false);
       setNewEmail('');
       setNewPassword('');
@@ -158,8 +178,8 @@ const UserManager: React.FC = () => {
     try {
       const payload: Record<string, any> = {
         role: formData.role,
-        full_name: formData.full_name,
-        employee_code: formData.employee_code || null,
+        full_name: normalizeText(formData.full_name || ''),
+        employee_code: normalizeText(formData.employee_code || '') || null,
         is_approved: formData.is_approved,
         is_active: formData.is_active,
       };
@@ -170,6 +190,14 @@ const UserManager: React.FC = () => {
 
       const { error } = await supabase.from('profiles').update(payload).eq('id', editingId);
       if (error) throw error;
+
+      await logAction('user_updated', {
+        target_user_id: editingId,
+        role: payload.role,
+        branch_id: payload.branch_id ?? null,
+        is_approved: payload.is_approved,
+        is_active: payload.is_active,
+      });
 
       toast.success('تم تحديث بيانات المستخدم');
       resetForm();
@@ -188,6 +216,11 @@ const UserManager: React.FC = () => {
   const toggleApproval = async (user: Profile) => {
     const { error } = await supabase.from('profiles').update({ is_approved: !user.is_approved }).eq('id', user.id);
     if (!error) {
+      await logAction('user_approval_changed', {
+        target_user_id: user.id,
+        email: user.email,
+        is_approved: !user.is_approved,
+      });
       toast.success(user.is_approved ? 'تم إلغاء التفعيل' : 'تم تفعيل الحساب');
       fetchUsers();
     }
@@ -196,6 +229,11 @@ const UserManager: React.FC = () => {
   const toggleStatus = async (user: Profile) => {
     const { error } = await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
     if (!error) {
+      await logAction('user_status_changed', {
+        target_user_id: user.id,
+        email: user.email,
+        is_active: !user.is_active,
+      });
       toast.info(user.is_active ? 'تم تجميد الحساب' : 'تم تفعيل الحساب');
       fetchUsers();
     }

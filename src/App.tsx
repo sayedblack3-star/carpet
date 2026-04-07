@@ -204,24 +204,26 @@ const App: React.FC = () => {
       }
 
       if (!data) {
-        const newRole = adminUser ? 'admin' : 'seller';
+        if (adminUser) {
+          const { data: newProfile, error: insertError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              email,
+              role: 'admin',
+              full_name: 'المدير العام',
+              is_approved: true,
+              is_active: true,
+            })
+            .select()
+            .single();
 
-        const { data: newProfile, error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.id,
-            email,
-            role: newRole,
-            full_name: adminUser ? 'المدير العام' : 'مستخدم جديد',
-            is_approved: adminUser,
-            is_active: true,
-          })
-          .select()
-          .single();
+          if (insertError) throw insertError;
+          if (newProfile) setProfile(newProfile as Profile);
+          return;
+        }
 
-        if (insertError) throw insertError;
-        if (newProfile) setProfile(newProfile as Profile);
-        return;
+        throw new Error('لم يتم العثور على ملف المستخدم. يجب أن يقوم المدير بإنشاء الحساب أو تفعيله أولًا.');
       }
 
       setProfile(data as Profile);

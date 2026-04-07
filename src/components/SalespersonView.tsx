@@ -24,6 +24,8 @@ import {
 import { toast } from 'sonner';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import ProductSearch from './ProductSearch';
+import { logAction } from '../lib/logger';
+import { normalizeText, validateOrderInput } from '../lib/security';
 
 interface SalespersonViewProps {
   branchId?: string | null;
@@ -169,8 +171,8 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
     setSavingSeller(true);
     try {
       const payload = {
-        full_name: sellerForm.full_name.trim(),
-        employee_code: sellerForm.employee_code.trim() || null,
+        full_name: normalizeText(sellerForm.full_name),
+        employee_code: normalizeText(sellerForm.employee_code) || null,
       };
 
       const { error } = await supabase.from('profiles').update(payload).eq('id', sessionUser.id);
@@ -186,6 +188,10 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           : prev,
       );
 
+      await logAction('seller_profile_updated', {
+        full_name: payload.full_name,
+        employee_code: payload.employee_code,
+      }, currentProfile?.branch_id || branchId || undefined);
       toast.success('تم حفظ بيانات البائع');
     } catch (err: any) {
       toast.error(`تعذر حفظ البيانات: ${err.message}`);
@@ -213,6 +219,17 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const handleSubmitOrder = async () => {
     if (!sessionUser?.id || cart.length === 0) return;
 
+    const orderInputError = validateOrderInput({ customerName, customerPhone, notes });
+    if (orderInputError) {
+      toast.error(orderInputError);
+      return;
+    }
+
+    if (cart.some((item) => item.cartQuantity <= 0)) {
+      toast.error('كل كميات الطلب يجب أن تكون أكبر من صفر.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const total = cart.reduce((sum, item) => sum + (item.price_sell_after || item.price_sell_before) * item.cartQuantity, 0);
@@ -220,14 +237,14 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 
       const orderPayload: Record<string, any> = {
         salesperson_id: sessionUser.id,
-        salesperson_name: sellerForm.full_name.trim() || currentProfile?.full_name || '',
-        customer_name: customerName,
-        customer_phone: customerPhone,
+        salesperson_name: normalizeText(sellerForm.full_name) || currentProfile?.full_name || '',
+        customer_name: normalizeText(customerName),
+        customer_phone: normalizeText(customerPhone),
         status: 'sent_to_cashier',
         payment_status: 'unpaid',
         total_original_price: originalTotal,
         total_final_price: total,
-        notes,
+        notes: normalizeText(notes),
         sent_to_cashier_at: new Date().toISOString(),
       };
 
@@ -251,6 +268,12 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
       const { error: itemsError } = await supabase.from('order_items').insert(items);
       if (itemsError) throw itemsError;
 
+      await logAction('order_sent_to_cashier', {
+        order_id: order.id,
+        order_number: order.order_number,
+        items_count: items.length,
+        total_final_price: total,
+      }, orderPayload.branch_id);
       toast.success('تم إرسال الفاتورة إلى الكاشير');
       setCart([]);
       setNotes('');

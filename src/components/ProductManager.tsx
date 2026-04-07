@@ -4,6 +4,8 @@ import { Product } from '../types';
 import productsSeed from '../data.json';
 import { Package, Plus, Edit2, Trash2, Search, X, Save, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { logAction } from '../lib/logger';
+import { normalizeText, validateProductPayload } from '../lib/security';
 
 export default function ProductManager() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -37,19 +39,30 @@ export default function ProductManager() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.code || !form.name) {
-      toast.error('الكود والاسم مطلوبان');
+    const payload = {
+      ...form,
+      code: normalizeText(form.code),
+      name: normalizeText(form.name),
+      description: normalizeText(form.description),
+      category: normalizeText(form.category),
+    };
+
+    const validationError = validateProductPayload(payload);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
 
     try {
       if (editingId) {
-        const { error } = await supabase.from('products').update({ ...form, updated_at: new Date().toISOString() }).eq('id', editingId);
+        const { error } = await supabase.from('products').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingId);
         if (error) throw error;
+        await logAction('product_updated', { product_id: editingId, code: payload.code, name: payload.name, price_sell_before: payload.price_sell_before, price_sell_after: payload.price_sell_after });
         toast.success('تم تحديث المنتج');
       } else {
-        const { error } = await supabase.from('products').insert({ ...form, is_active: true, is_deleted: false });
+        const { error } = await supabase.from('products').insert({ ...payload, is_active: true, is_deleted: false });
         if (error) throw error;
+        await logAction('product_created', { code: payload.code, name: payload.name, price_sell_before: payload.price_sell_before, price_sell_after: payload.price_sell_after });
         toast.success('تمت إضافة المنتج');
       }
 
@@ -63,6 +76,8 @@ export default function ProductManager() {
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from('products').update({ is_deleted: true }).eq('id', id);
     if (!error) {
+      const product = products.find((entry) => entry.id === id);
+      await logAction('product_deleted', { product_id: id, code: product?.code || null, name: product?.name || null });
       toast.success('تم حذف المنتج');
       fetchProducts();
     }
@@ -88,6 +103,7 @@ export default function ProductManager() {
         if (error) console.warn('Batch error:', error.message);
       }
 
+      await logAction('products_imported', { imported_count: items.length });
       toast.success(`تم استيراد ${items.length} منتج بنجاح`);
       fetchProducts();
     } catch (err: any) {

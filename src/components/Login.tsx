@@ -3,6 +3,8 @@ import { supabase } from '../supabase';
 import { toast } from 'sonner';
 import { LogIn, Mail, Lock, Sparkles } from 'lucide-react';
 import BrandMark from './BrandMark';
+import { logAction } from '../lib/logger';
+import { normalizeEmail } from '../lib/security';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -13,15 +15,18 @@ const Login: React.FC = () => {
     e.preventDefault();
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const normalizedEmail = normalizeEmail(email);
+    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
 
     if (error) {
+      console.warn('Login failed:', error.message);
       if (error.message.includes('Invalid login')) {
         toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
       } else {
         toast.error(error.message);
       }
     } else {
+      await logAction('login_success', { email: normalizedEmail });
       toast.success('أهلًا بك في كاربت لاند');
     }
 
