@@ -8,10 +8,28 @@ interface Log {
   id: string;
   action: string;
   user_id: string;
-  user_email: string;
-  details: any;
+  user_email: string | null;
+  details: unknown;
   created_at: string;
 }
+
+const formatDetailValue = (value: unknown): string => {
+  if (value == null) return '-';
+  if (Array.isArray(value)) return value.map(formatDetailValue).join(', ');
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const formatLogDetails = (details: unknown): string => {
+  if (details == null) return '-';
+  if (typeof details === 'string') return details;
+  if (typeof details !== 'object' || Array.isArray(details)) return formatDetailValue(details);
+
+  const entries = Object.entries(details as Record<string, unknown>);
+  if (entries.length === 0) return '-';
+
+  return entries.map(([key, value]) => `${key}: ${formatDetailValue(value)}`).join(' | ');
+};
 
 export default function AuditLogsView() {
   const [logs, setLogs] = useState<Log[]>([]);
@@ -42,10 +60,15 @@ export default function AuditLogsView() {
     });
   }, []);
 
-  const filteredLogs = logs.filter(log => 
-    log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.user_email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredLogs = logs.filter(log => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) return true;
+
+    return [log.action, log.user_email ?? '', formatLogDetails(log.details)]
+      .join(' ')
+      .toLowerCase()
+      .includes(normalizedSearch);
+  });
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto pharaonic-bg min-h-full" dir="rtl">
@@ -98,7 +121,7 @@ export default function AuditLogsView() {
                          <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
                            <User className="w-4 h-4" />
                          </div>
-                         <span className="font-bold text-slate-700">{log.user_email}</span>
+                         <span className="font-bold text-slate-700">{log.user_email || 'No email'}</span>
                        </div>
                     </td>
                     <td className="p-6">
@@ -107,7 +130,7 @@ export default function AuditLogsView() {
                        </span>
                     </td>
                     <td className="p-6 text-slate-500 font-medium text-sm">
-                      {typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}
+                      {formatLogDetails(log.details)}
                     </td>
                   </tr>
                 ))
