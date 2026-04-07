@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase';
-import { createClient } from '@supabase/supabase-js';
 import { Branch, Profile, UserRole } from '../types';
 import { Users, Edit2, Shield, X, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2, UserPlus, Lock, Eye, EyeOff, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -12,9 +11,6 @@ const ROLE_LABELS: Record<UserRole, string> = {
   seller: 'بائع',
   cashier: 'كاشير',
 };
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 const EMPTY_FORM: Partial<Profile> = {
   role: 'seller',
@@ -106,15 +102,34 @@ const UserManager: React.FC = () => {
 
     setCreating(true);
     try {
-      const tempClient = createClient(supabaseUrl, supabaseKey, {
-        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
+      }
+
+      const response = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: cleanEmail,
+          password: newPassword,
+          full_name: cleanName,
+          role: newRole,
+          branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
+        }),
       });
 
-      const { data, error } = await tempClient.auth.signUp({
-        email: cleanEmail,
-        password: newPassword,
-        options: { data: { full_name: cleanName } },
-      });
+      const result = await response
+        .json()
+        .catch(() => ({ error: response.status === 404 ? 'Admin user provisioning endpoint is not available.' : 'Unexpected server response.' }));
+      const error = response.ok ? null : new Error(result.error || 'تعذر إنشاء الحساب الجديد.');
+      const data = { user: result.user };
 
       if (error) throw error;
       if (!data.user) throw new Error('فشل في إنشاء المستخدم');
@@ -161,7 +176,7 @@ const UserManager: React.FC = () => {
       setNewBranchId('');
       fetchUsers();
     } catch (err: any) {
-      if (err.message?.includes('already registered')) {
+      if (err.message?.includes('already registered') || err.message?.includes('already exists')) {
         toast.error('هذا البريد الإلكتروني مسجل بالفعل');
       } else {
         toast.error(`خطأ: ${err.message}`);

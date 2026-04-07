@@ -277,6 +277,23 @@ const App: React.FC = () => {
     );
   }
 
+  if (!profile.is_active) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4" dir="rtl">
+        <div className="max-w-md w-full bg-white p-10 rounded-3xl shadow-2xl border text-center">
+          <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShieldAlert className="w-10 h-10" />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-4">الحساب موقوف</h1>
+          <p className="text-slate-500 mb-8">تم تعليق هذا الحساب من الإدارة. يرجى التواصل مع المدير لإعادة التفعيل.</p>
+          <button onClick={handleLogout} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-2xl transition flex items-center justify-center gap-2">
+            <LogOut className="w-5 h-5" /> تسجيل خروج
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!profile.is_approved) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4" dir="rtl">
