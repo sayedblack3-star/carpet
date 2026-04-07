@@ -312,7 +312,7 @@ const UserManager: React.FC = () => {
                 <label className="text-xs font-bold text-slate-400 block mb-1">كلمة المرور</label>
                 <div className="relative">
                   <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input required type={showPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={6} className="w-full pr-10 pl-12 py-3 rounded-xl bg-slate-50 border font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="6 أحرف على الأقل" />
+                  <input required type={showPassword ? 'text' : 'password'} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={10} className="w-full pr-10 pl-12 py-3 rounded-xl bg-slate-50 border font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="10 أحرف على الأقل مع حرف كبير وصغير ورقم" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
