@@ -168,7 +168,6 @@ const App: React.FC = () => {
         const shouldRefreshProfile =
           !currentProfile ||
           currentProfile.id !== nextSession.user.id ||
-          event === 'SIGNED_IN' ||
           event === 'USER_UPDATED';
 
         if (shouldRefreshProfile) {
@@ -198,8 +197,17 @@ const App: React.FC = () => {
 
         setSession(session);
         if (session) {
-          setLoading(true);
-          await fetchProfile(session.user);
+          const cachedProfile = readCachedProfile(session.user.id);
+
+          if (cachedProfile) {
+            setProfile(cachedProfile);
+            setLoading(false);
+            void fetchProfile(session.user);
+          } else {
+            setLoading(true);
+            await fetchProfile(session.user);
+          }
+
           void fetchBranches();
         } else {
           setLoading(false);
