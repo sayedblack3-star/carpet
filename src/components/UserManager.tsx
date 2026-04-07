@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { createClient } from '@supabase/supabase-js';
 import { Profile, UserRole } from '../types';
-import { Users, Edit2, Shield, X, Check, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2 } from 'lucide-react';
+import { Users, Edit2, Shield, X, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2, UserPlus, Lock, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 const ROLE_LABELS: Record<UserRole, string> = { admin: 'مدير عام', seller: 'بائع', cashier: 'كاشير' };
+
+// Uses same env vars as main supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 const UserManager: React.FC = () => {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -15,6 +20,15 @@ const UserManager: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'unapproved' | 'active'>('all');
   const [formData, setFormData] = useState<Partial<Profile>>({ role: 'seller', full_name: '', employee_code: '', is_approved: false, is_active: true });
 
+  // Create user state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState<UserRole>('seller');
+  const [showPassword, setShowPassword] = useState(false);
+  const [creating, setCreating] = useState(false);
+
   useEffect(() => { fetchUsers(); }, []);
 
   const fetchUsers = async () => {
@@ -22,6 +36,50 @@ const UserManager: React.FC = () => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
     if (data) setUsers(data as Profile[]);
     setLoading(false);
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmail || !newPassword || !newName) { toast.error('يرجى ملء جميع الحقول'); return; }
+    if (newPassword.length < 6) { toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
+    setCreating(true);
+    try {
+      // Use a non-persisting client so admin stays logged in
+      const tempClient = createClient(supabaseUrl, supabaseKey, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+      });
+      const { data, error } = await tempClient.auth.signUp({
+        email: newEmail, password: newPassword,
+        options: { data: { full_name: newName } }
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error('فشل في إنشاء المستخدم');
+
+      // Update profile with role and auto-approve
+      const { error: profileErr } = await supabase.from('profiles').update({
+        role: newRole, is_approved: true, is_active: true, full_name: newName
+      }).eq('id', data.user.id);
+
+      // If profile doesn't exist yet (trigger delay), insert it
+      if (profileErr) {
+        await supabase.from('profiles').upsert({
+          id: data.user.id, email: newEmail, full_name: newName,
+          role: newRole, is_approved: true, is_active: true
+        });
+      }
+
+      toast.success(`تم إنشاء حساب ${newName} بنجاح`);
+      setShowCreateModal(false);
+      setNewEmail(''); setNewPassword(''); setNewName(''); setNewRole('seller');
+      fetchUsers();
+    } catch (err: any) {
+      if (err.message?.includes('already registered')) {
+        toast.error('هذا البريد الإلكتروني مسجل بالفعل');
+      } else {
+        toast.error('خطأ: ' + err.message);
+      }
+    }
+    setCreating(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,10 +118,68 @@ const UserManager: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col p-4 sm:p-8 space-y-8 overflow-y-auto" dir="rtl">
-      <div>
-        <h1 className="text-3xl font-black text-slate-800">إدارة المستخدمين</h1>
-        <p className="text-slate-400 font-medium mt-1">إدارة الموظفين وصلاحياتهم</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800">إدارة المستخدمين</h1>
+          <p className="text-slate-400 font-medium mt-1">إدارة الموظفين وصلاحياتهم</p>
+        </div>
+        <button onClick={() => setShowCreateModal(true)} className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-slate-800 active:scale-95">
+          <UserPlus className="w-5 h-5" /> إضافة موظف جديد
+        </button>
       </div>
+
+      {/* Create User Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><UserPlus className="w-5 h-5 text-blue-500" /> إنشاء حساب موظف</h2>
+              <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">الاسم الكامل</label>
+                <input required type="text" value={newName} onChange={e => setNewName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="أحمد محمد" />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">البريد الإلكتروني</label>
+                <div className="relative">
+                  <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input required type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)}
+                    className="w-full pr-10 pl-4 py-3 rounded-xl bg-slate-50 border font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="user@carpetland.com" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">كلمة المرور</label>
+                <div className="relative">
+                  <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input required type={showPassword ? 'text' : 'password'} value={newPassword} onChange={e => setNewPassword(e.target.value)} minLength={6}
+                    className="w-full pr-10 pl-12 py-3 rounded-xl bg-slate-50 border font-bold outline-none focus:ring-2 focus:ring-blue-100" placeholder="6 أحرف على الأقل" />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">الدور الوظيفي</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['seller', 'cashier', 'admin'] as UserRole[]).map(r => (
+                    <button key={r} type="button" onClick={() => setNewRole(r)}
+                      className={`py-3 rounded-xl font-bold text-sm transition-all ${newRole === r ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                      {ROLE_LABELS[r]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button type="submit" disabled={creating}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-lg shadow-xl active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2">
+                {creating ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> : <><UserPlus className="w-5 h-5" /> إنشاء الحساب</>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         {/* Edit Panel */}
@@ -105,7 +221,7 @@ const UserManager: React.FC = () => {
               <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 border-dashed text-center">
                 <Shield className="w-10 h-10 text-blue-500 mx-auto mb-3" />
                 <p className="text-blue-700 text-xs font-bold leading-relaxed">اختر مستخدم من القائمة لتعديل صلاحياته</p>
-                <p className="text-blue-500 text-[10px] mt-3 font-bold">💡 المستخدمين الجدد يسجلون من صفحة الدخول ثم تفعّلهم من هنا</p>
+                <p className="text-blue-500 text-[10px] mt-3 font-bold">💡 لإضافة موظف جديد اضغط "إضافة موظف جديد" أعلاه</p>
               </div>
             )}
           </div>

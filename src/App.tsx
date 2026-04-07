@@ -58,7 +58,39 @@ const App: React.FC = () => {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+
+      if (error) {
+        // PGRST116 means zero rows returned from .single()
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found, attempting to auto-create...');
+          const { data: authData } = await supabase.auth.getUser();
+          const email = authData.user?.email || '';
+          // Ensure the master admin account operates correctly even if trigger failed
+          const isAdmin = email === 'admin@carpetland.com' || email === 'sayed@carpetland.com';
+          const newRole = isAdmin ? 'admin' : 'seller';
+          
+          const { data: newProfile, error: insertError } = await supabase.from('profiles').insert({
+            id: userId,
+            email: email,
+            role: newRole,
+            full_name: isAdmin ? 'المدير العام' : 'مستخدم جديد',
+            is_approved: isAdmin,
+            is_active: true
+          }).select().single();
+
+          if (insertError) throw insertError;
+
+          if (newProfile) {
+            setProfile(newProfile as Profile);
+            setActiveTab(isAdmin ? 'dashboard' : 'pos');
+          }
+          return;
+        }
+        
+        throw error;
+      }
+
       if (data) {
         setProfile(data as Profile);
         if (data.role === 'seller') setActiveTab('pos');
@@ -67,9 +99,10 @@ const App: React.FC = () => {
       } else {
         setProfile(null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching profile:', err);
-      toast.error('خطأ في تحميل بيانات الملف الشخصي');
+      toast.error('خطأ في تحميل بيانات الملف الشخصي: ' + (err.message || 'Error'));
+      setProfile(null);
     } finally {
       setLoading(false);
     }

@@ -1,14 +1,12 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { toast } from 'sonner';
-import { ShieldCheck, LogIn, Mail, Lock, Sparkles, UserPlus } from 'lucide-react';
+import { ShieldCheck, LogIn, Mail, Lock, Sparkles } from 'lucide-react';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,24 +20,6 @@ const Login: React.FC = () => {
       }
     } else {
       toast.success('مرحباً بك في أرض السجاد');
-    }
-    setLoading(false);
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!fullName.trim()) { toast.error('يرجى إدخال الاسم الكامل'); return; }
-    if (password.length < 6) { toast.error('كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } }
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('تم إنشاء حسابك بنجاح! يرجى انتظار موافقة المدير لتفعيل حسابك.');
     }
     setLoading(false);
   };
@@ -58,27 +38,10 @@ const Login: React.FC = () => {
               <ShieldCheck className="w-12 h-12 text-white drop-shadow-lg" />
             </div>
             <h1 className="text-4xl font-black text-white mb-2">أرض السجاد</h1>
-            <p className="text-slate-400 font-medium text-sm">نظام إدارة المبيعات</p>
+            <p className="text-slate-400 font-medium text-sm">نظام إدارة المبيعات الداخلي</p>
           </div>
 
-          {/* Mode Toggle */}
-          <div className="flex bg-white/5 rounded-2xl p-1 mb-8 border border-white/5">
-            <button onClick={() => setMode('login')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${mode === 'login' ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-              <LogIn className="w-4 h-4" /> دخول
-            </button>
-            <button onClick={() => setMode('register')} className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${mode === 'register' ? 'bg-amber-500 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-              <UserPlus className="w-4 h-4" /> تسجيل جديد
-            </button>
-          </div>
-
-          <form onSubmit={mode === 'login' ? handleLogin : handleRegister} className="space-y-5">
-            {mode === 'register' && (
-              <div className="relative">
-                <input type="text" required value={fullName} onChange={(e) => setFullName(e.target.value)}
-                  className="block w-full bg-black/40 border-2 border-white/5 rounded-2xl py-4 px-5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all font-semibold"
-                  placeholder="الاسم الكامل" />
-              </div>
-            )}
+          <form onSubmit={handleLogin} className="space-y-5">
             <div className="relative">
               <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
                 <Mail className="h-5 w-5 text-slate-500" />
@@ -99,15 +62,14 @@ const Login: React.FC = () => {
               className="w-full bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-bold text-lg py-4 rounded-2xl transition-all shadow-xl shadow-amber-600/20 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-3">
               {loading ? (
                 <div className="w-6 h-6 border-[3px] border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : mode === 'login' ? (
-                <><LogIn className="w-5 h-5" /> دخول للنظام</>
               ) : (
-                <><UserPlus className="w-5 h-5" /> إنشاء حساب</>
+                <><LogIn className="w-5 h-5" /> دخول للنظام</>
               )}
             </button>
           </form>
 
           <div className="mt-8 pt-6 border-t border-white/5 text-center">
+            <p className="text-slate-600 text-xs font-medium mb-3">نظام داخلي — تواصل مع المدير للحصول على حساب</p>
             <div className="inline-flex items-center gap-2 text-amber-500/80 bg-amber-500/5 border border-amber-500/20 px-4 py-2 rounded-full text-xs font-black uppercase tracking-widest">
               <Sparkles className="w-4 h-4" /> Carpet Land ERP v5.0
             </div>
