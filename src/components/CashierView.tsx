@@ -19,6 +19,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { setupRealtimeFallback } from '../lib/realtimeFallback';
 
 type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
 
@@ -48,14 +49,14 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     fetchProducts();
     fetchSellerMeta();
 
-    const channel = supabase
-      .channel('cashier_orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return setupRealtimeFallback({
+      fetchNow: fetchOrders,
+      createChannel: () =>
+        supabase
+          .channel('cashier_orders')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders()),
+      pollIntervalMs: 15000,
+    });
   }, [branchId, branchEnabled]);
 
   const fetchOrders = async () => {

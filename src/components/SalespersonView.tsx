@@ -22,6 +22,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import ProductSearch from './ProductSearch';
 
 interface SalespersonViewProps {
@@ -83,29 +84,29 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   useEffect(() => {
     if (!sessionUser?.id) return;
 
-    const ordersChannel = supabase
-      .channel(`seller-orders-${sessionUser.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'orders', filter: `salesperson_id=eq.${sessionUser.id}` },
-        (payload) => {
-          const nextOrder = payload.new as Order;
-          fetchMyOrders(sessionUser.id, currentProfile?.branch_id || branchId || undefined);
+    return setupRealtimeFallback({
+      fetchNow: () => fetchMyOrders(sessionUser.id, currentProfile?.branch_id || branchId || undefined),
+      createChannel: () =>
+        supabase
+          .channel(`seller-orders-${sessionUser.id}`)
+          .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'orders', filter: `salesperson_id=eq.${sessionUser.id}` },
+            (payload) => {
+              const nextOrder = payload.new as Order;
+              fetchMyOrders(sessionUser.id, currentProfile?.branch_id || branchId || undefined);
 
-          if (nextOrder.status === 'confirmed') {
-            toast.success(`تم تأكيد الطلب #${nextOrder.order_number} من الكاشير`);
-          } else if (nextOrder.status === 'under_review') {
-            toast.info(`الكاشير راجع الطلب #${nextOrder.order_number} وحدّث محتواه`);
-          } else if (nextOrder.status === 'cancelled') {
-            toast.warning(`تم إلغاء الطلب #${nextOrder.order_number}`);
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(ordersChannel);
-    };
+              if (nextOrder.status === 'confirmed') {
+                toast.success(`تم تأكيد الطلب #${nextOrder.order_number} من الكاشير`);
+              } else if (nextOrder.status === 'under_review') {
+                toast.info(`الكاشير راجع الطلب #${nextOrder.order_number} وحدّث محتواه`);
+              } else if (nextOrder.status === 'cancelled') {
+                toast.warning(`تم إلغاء الطلب #${nextOrder.order_number}`);
+              }
+            },
+          ),
+      pollIntervalMs: 15000,
+    });
   }, [sessionUser?.id, currentProfile?.branch_id, branchId]);
 
   const fetchProducts = async () => {

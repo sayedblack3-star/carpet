@@ -4,6 +4,7 @@ import { Clock, Play, Square, DollarSign, Wallet, AlertCircle } from 'lucide-rea
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 import { format } from 'date-fns';
+import { setupRealtimeFallback } from '../lib/realtimeFallback';
 
 interface ShiftManagerProps {
   userId: string;
@@ -31,11 +32,15 @@ export default function ShiftManager({ userId, branchId }: ShiftManagerProps) {
   };
 
   useEffect(() => {
-    fetchActiveShift();
-    const channel = supabase.channel('shifts-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `user_id=eq.${userId}` }, () => fetchActiveShift())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    void fetchActiveShift();
+    return setupRealtimeFallback({
+      fetchNow: fetchActiveShift,
+      createChannel: () =>
+        supabase
+          .channel('shifts-sync')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts', filter: `user_id=eq.${userId}` }, () => fetchActiveShift()),
+      pollIntervalMs: 20000,
+    });
   }, [userId]);
 
   const handleStartShift = async () => {

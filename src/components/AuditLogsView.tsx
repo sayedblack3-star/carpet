@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { format } from 'date-fns';
 import { Activity, Search, ShieldAlert, User, Clock, Store } from 'lucide-react';
+import { setupRealtimeFallback } from '../lib/realtimeFallback';
 
 interface Log {
   id: string;
@@ -30,11 +31,15 @@ export default function AuditLogsView() {
   };
 
   useEffect(() => {
-    fetchLogs();
-    const channel = supabase.channel('audit-sync')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, () => fetchLogs())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    void fetchLogs();
+    return setupRealtimeFallback({
+      fetchNow: fetchLogs,
+      createChannel: () =>
+        supabase
+          .channel('audit-sync')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, () => fetchLogs()),
+      pollIntervalMs: 20000,
+    });
   }, []);
 
   const filteredLogs = logs.filter(log => 

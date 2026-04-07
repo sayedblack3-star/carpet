@@ -4,6 +4,7 @@ import { Shortage } from '../types';
 import { ClipboardList, Plus, CheckCircle, Clock, Search, Copy, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { setupRealtimeFallback } from '../lib/realtimeFallback';
 
 interface ShortagesViewProps {
   userName: string;
@@ -33,11 +34,13 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
   };
 
   useEffect(() => {
-    fetchShortages();
-    const channel = supabase.channel('shortages-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'shortages' }, () => fetchShortages()).subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    void fetchShortages();
+    return setupRealtimeFallback({
+      fetchNow: fetchShortages,
+      createChannel: () =>
+        supabase.channel('shortages-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'shortages' }, () => fetchShortages()),
+      pollIntervalMs: 20000,
+    });
   }, [branchId, branchEnabled]);
 
   const handleAdd = async (e: React.FormEvent) => {
