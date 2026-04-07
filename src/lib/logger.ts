@@ -6,15 +6,20 @@ export const logAction = async (action: string, details: string | any, branchId?
     const user = session?.user;
     if (!user) return;
 
-    await supabase.from('audit_logs').insert([{
-      action,
-      user_id: user.id,
-      user_email: user.email,
-      user_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email,
-      entity_type: 'system',
-      details: { message: details, branchId: branchId || null }
-    }]);
+    // Keep the client-side audit payload minimal so it remains compatible
+    // with older live schemas during rollout and does not spam 400s in the console.
+    const { error } = await supabase.from('audit_logs').insert([
+      {
+        action,
+        user_id: user.id,
+        user_email: user.email,
+      },
+    ]);
+
+    if (error) {
+      console.warn('Audit log insert skipped:', error.message);
+    }
   } catch (error) {
-    console.error('Failed to log action:', error);
+    console.warn('Failed to log action:', error);
   }
 };
