@@ -1,5 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Tajawal:wght@300;400;500;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
@@ -8,44 +7,28 @@
 
 body {
   font-family: "Cairo", sans-serif;
+  background-color: #fafbfc;
+  color: #111827;
 }
 
-@theme {
-  --font-sans: "Tajawal", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Amiri", ui-serif, Georgia, serif;
-}
+/* Smooth scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-body {
-  font-family: var(--font-sans);
-  background-color: #FDFBF7;
-  color: #111111;
-}
-
+/* Print styles */
 @media print {
-  body * {
-    visibility: hidden;
-  }
-  .print-receipt, .print-receipt * {
-    visibility: visible;
-  }
+  body * { visibility: hidden; }
+  .print-receipt, .print-receipt * { visibility: visible; }
   .print-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 80mm;
-    margin: 0;
-    padding: 10px;
-    font-size: 12px;
-    color: #000;
-    background: #fff;
+    position: absolute; left: 0; top: 0;
+    width: 80mm; margin: 0; padding: 10px;
+    font-size: 12px; color: #000; background: #fff;
   }
-  /* Hide scrollbars and extra margins for print */
-  @page {
-    margin: 0;
-  }
+  @page { margin: 0; }
 }
 
-.pharaonic-bg {
-  background-color: #fdfaf3 !important;
-  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d97706' fill-opacity='0.08'%3E%3Cpath d='M30 0L60 30 30 60 0 30zM15 15l30 30-15 15L0 30zM45 15l15 15-15 15-15-15z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-}
+/* RTL animation helpers */
+.animate-in { animation: animate-in 0.3s ease-out; }
+@keyframes animate-in { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
