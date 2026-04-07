@@ -48,6 +48,18 @@ const getSupabaseServerConfig = () => {
   return { url, serviceRoleKey };
 };
 
+const createSupabaseServerClient = (url: string, key: string, accessToken?: string) =>
+  createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
+  });
+
 export default async function handler(request: Request) {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed.' }, 405);
@@ -91,9 +103,8 @@ export default async function handler(request: Request) {
     }
 
     const { url, serviceRoleKey } = getSupabaseServerConfig();
-    const adminClient = createClient(url, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
+    const adminClient = createSupabaseServerClient(url, serviceRoleKey);
+    const actorClient = createSupabaseServerClient(url, serviceRoleKey, accessToken);
 
     const {
       data: { user: actor },
@@ -104,13 +115,14 @@ export default async function handler(request: Request) {
       return json({ error: 'Invalid session token.' }, 401);
     }
 
-    const { data: actorProfile, error: actorProfileError } = await adminClient
+    const { data: actorProfile, error: actorProfileError } = await actorClient
       .from('profiles')
       .select('role, is_active, is_approved')
       .eq('id', actor.id)
       .maybeSingle();
 
     if (actorProfileError) {
+      console.error('Admin profile verification failed:', actorProfileError.message);
       return json({ error: 'Unable to verify the current admin profile.' }, 500);
     }
 
