@@ -1,79 +1,97 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase';
-import { Order, OrderItem, Branch, Profile } from '../types';
+import { Order, OrderItem, Product } from '../types';
 import { format } from 'date-fns';
-import { 
-  Search, Printer, CheckCircle, Clock, Trash2, ShieldAlert, CreditCard, 
-  ChevronRight, AlertCircle, ShoppingCart, User, Store as BranchIcon, ArrowLeft, Filter, 
-  TrendingUp, Monitor, Edit2, Copy, X, RotateCcw, Bell, BellRing, History as HistoryIcon
+import {
+  Search,
+  Printer,
+  CheckCircle,
+  Trash2,
+  CreditCard,
+  ChevronRight,
+  ShoppingCart,
+  User,
+  X,
+  Minus,
+  Plus,
+  BadgeInfo,
+  ScanSearch,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import ShiftManager from './ShiftManager';
 
-const CashierView: React.FC = () => {
+type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
+
+interface CashierViewProps {
+  branchId?: string | null;
+  branchName?: string;
+  branchEnabled?: boolean;
+}
+
+const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchEnabled = false }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeShift, setActiveShift] = useState<any>(null);
   const [sessionUser, setSessionUser] = useState<any>(null);
-  const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
+  const [productSearch, setProductSearch] = useState('');
+  const [sellerMeta, setSellerMeta] = useState<SellerMeta>({});
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setSessionUser(session.user);
-        fetchProfile(session.user.id);
-        checkShift(session.user.id);
-      }
+      if (session) setSessionUser(session.user);
     });
+
+    fetchOrders();
+    fetchProducts();
+    fetchSellerMeta();
 
     const channel = supabase
       .channel('cashier_orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        fetchOrders();
-      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [branchId, branchEnabled]);
 
-  const checkShift = async (userId: string) => {
-    const { data } = await supabase
-      .from('shifts')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('status', 'active')
-      .maybeSingle();
-    setActiveShift(data);
-  };
-
-  const fetchProfile = async (id: string) => {
-    const { data } = await supabase.from('profiles').select('*').eq('id', id).single();
-    if (data) {
-      setCurrentProfile(data as Profile);
-      fetchOrders(data.branch_id);
-    }
-  };
-
-  const fetchOrders = async (branchId?: string | null) => {
-    const bid = branchId || currentProfile?.branch_id;
-    if (!bid) return;
-    
+  const fetchOrders = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('branch_id', bid)
-      .in('status', ['sent_to_cashier', 'under_review', 'confirmed'])
-      .order('created_at', { ascending: false })
-      .limit(50);
-    
+    let query = supabase.from('orders').select('*').in('status', ['sent_to_cashier', 'under_review', 'confirmed']);
+    if (branchEnabled && branchId) {
+      query = query.eq('branch_id', branchId);
+    }
+    const { data } = await query.order('created_at', { ascending: false }).limit(50);
     if (data) setOrders(data as Order[]);
     setLoading(false);
+  };
+
+  const fetchProducts = async () => {
+    const { data } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
+    if (data) setProducts(data as Product[]);
+  };
+
+  const fetchSellerMeta = async () => {
+    let query = supabase.from('profiles').select('id, full_name, employee_code');
+    if (branchEnabled && branchId) {
+      query = query.eq('branch_id', branchId);
+    }
+
+    const { data } = await query;
+    if (!data) return;
+
+    const mapped = (data as Array<{ id: string; full_name?: string; employee_code?: string }>).reduce<SellerMeta>((acc, profile) => {
+      acc[profile.id] = {
+        full_name: profile.full_name,
+        employee_code: profile.employee_code,
+      };
+      return acc;
+    }, {});
+
+    setSellerMeta(mapped);
   };
 
   const fetchOrderItems = async (orderId: string) => {
@@ -81,310 +99,435 @@ const CashierView: React.FC = () => {
     if (data) setOrderItems(data as OrderItem[]);
   };
 
-  const markAsConfirmed = async (order: Order) => {
-    const isManagement = currentProfile?.role === 'admin';
-    if (!activeShift && !isManagement) {
-       toast.error('يجب عليك بـدء وردية عمل أولاً قبل تحصيل الأموال');
-       return;
+  const markOrderAsUnderReview = async (orderId: string) => {
+    await supabase.from('orders').update({ status: 'under_review' }).eq('id', orderId).neq('status', 'confirmed');
+    if (selectedOrder?.id === orderId && selectedOrder.status !== 'confirmed') {
+      setSelectedOrder({ ...selectedOrder, status: 'under_review' });
+    }
+    fetchOrders();
+  };
+
+  const updateItemQuantity = async (itemId: string, newQty: number) => {
+    if (!selectedOrder || newQty <= 0) return;
+
+    const item = orderItems.find((entry) => entry.id === itemId);
+    if (!item) return;
+
+    const newTotal = item.unit_price * newQty;
+    const unitDiscount = item.quantity > 0 ? (item.discount_amount || 0) / item.quantity : 0;
+    const newDiscountAmount = unitDiscount * newQty;
+
+    const { error } = await supabase.from('order_items').update({
+      quantity: newQty,
+      total_price: newTotal,
+      discount_amount: newDiscountAmount,
+    }).eq('id', itemId);
+
+    if (!error) {
+      await markOrderAsUnderReview(selectedOrder.id);
+      await fetchOrderItems(selectedOrder.id);
+      await recalcOrderTotal(selectedOrder.id);
+      toast.success('تم تحديث الكمية');
+    }
+  };
+
+  const removeItem = async (itemId: string) => {
+    if (!selectedOrder) return;
+
+    const { error } = await supabase.from('order_items').delete().eq('id', itemId);
+    if (!error) {
+      await markOrderAsUnderReview(selectedOrder.id);
+      await fetchOrderItems(selectedOrder.id);
+      await recalcOrderTotal(selectedOrder.id);
+      toast.success('تم حذف الصنف');
+    }
+  };
+
+  const addProductToOrder = async (product: Product) => {
+    if (!selectedOrder) return;
+
+    const existing = orderItems.find((item) => item.product_id === product.id);
+    const unitPrice = product.price_sell_after || product.price_sell_before;
+    const unitDiscount = Math.max(0, product.price_sell_before - unitPrice);
+
+    if (existing) {
+      await updateItemQuantity(existing.id, existing.quantity + 1);
+      return;
     }
 
+    const { error } = await supabase.from('order_items').insert({
+      order_id: selectedOrder.id,
+      product_id: product.id,
+      product_name: product.name,
+      quantity: 1,
+      unit_price: unitPrice,
+      discount_amount: unitDiscount,
+      total_price: unitPrice,
+    });
+
+    if (!error) {
+      await markOrderAsUnderReview(selectedOrder.id);
+      await fetchOrderItems(selectedOrder.id);
+      await recalcOrderTotal(selectedOrder.id);
+      setProductSearch('');
+      toast.success('تمت إضافة الصنف إلى الفاتورة');
+    }
+  };
+
+  const recalcOrderTotal = async (orderId: string) => {
+    const { data: items } = await supabase.from('order_items').select('total_price, discount_amount').eq('order_id', orderId);
+    if (!items) return;
+
+    const totalFinal = items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
+    const totalOriginal = items.reduce((sum: number, item: any) => sum + (item.total_price || 0) + (item.discount_amount || 0), 0);
+
+    await supabase.from('orders').update({
+      total_final_price: totalFinal,
+      total_original_price: totalOriginal,
+    }).eq('id', orderId);
+
+    fetchOrders();
+    if (selectedOrder?.id === orderId) {
+      setSelectedOrder((prev) => prev ? { ...prev, total_final_price: totalFinal, total_original_price: totalOriginal } : null);
+    }
+  };
+
+  const markAsConfirmed = async (order: Order) => {
     try {
-      // 1. Update Order Status (Task 4: confirmed)
-      const { error } = await supabase
-        .from('orders')
-        .update({ 
-          status: 'confirmed', 
-          cashier_id: sessionUser?.id, 
-          confirmed_at: new Date().toISOString() 
-        })
-        .eq('id', order.id);
+      const { error } = await supabase.from('orders').update({
+        status: 'confirmed',
+        payment_status: 'paid',
+        cashier_id: sessionUser?.id,
+        confirmed_at: new Date().toISOString(),
+      }).eq('id', order.id);
 
       if (error) throw error;
 
-      // 2. Notify Salesperson (Task 5)
-      await supabase.from('notifications').insert({
-        branch_id: currentProfile?.branch_id!,
-        sender_id: sessionUser?.id,
-        receiver_id: order.salesperson_id,
-        order_id: order.id,
-        title: 'تم تحصيل طلبك! ✅',
-        message: `تم دفع الفاتورة رقم ${order.order_number} بنجاح من قبل الكاشير`,
-        type: 'sale'
-      });
-
-      toast.success('تم تأكيد عملية البيع والتحصيل بنجاح');
+      toast.success('تم تأكيد التحصيل بنجاح');
       setSelectedOrder(null);
       fetchOrders();
     } catch (err: any) {
-      toast.error('خطأ في التأكيد: ' + err.message);
+      toast.error(`خطأ: ${err.message}`);
     }
   };
 
-  const markAsReview = async (order: Order) => {
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: 'under_review' })
-      .eq('id', order.id);
-    
+  const cancelOrder = async (order: Order) => {
+    const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id);
     if (!error) {
-       toast.warning('الطلب الآن تحت المراجعة والتعديل');
-       fetchOrders();
+      toast.warning('تم إلغاء الطلب');
+      setSelectedOrder(null);
+      fetchOrders();
     }
   };
 
-  const filteredOrders = orders.filter(o => 
-    o.order_number.toString().includes(searchTerm) || 
-    o.salesperson_name.toLowerCase().includes(searchTerm.toLowerCase())
+  const handlePrint = () => {
+    if (!selectedOrder) return;
+
+    const sellerCode = sellerMeta[selectedOrder.salesperson_id]?.employee_code;
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    printWindow.document.write(`<html lang="ar" dir="rtl"><head><title>فاتورة #${selectedOrder.order_number}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:20px;direction:rtl}
+        table{width:100%;border-collapse:collapse;margin:16px 0}
+        th,td{border:1px solid #ddd;padding:8px;text-align:right}
+        th{background:#f5f5f5}
+        .header{text-align:center;margin-bottom:20px}
+        h1{margin:0}
+      </style></head><body>`);
+    printWindow.document.write(`<div class="header"><h1>كاربت لاند</h1><p>فاتورة رقم: ${selectedOrder.order_number}</p><p>${format(new Date(selectedOrder.created_at), 'yyyy-MM-dd HH:mm')}</p></div>`);
+    if (selectedOrder.customer_name) {
+      printWindow.document.write(`<p><b>العميل:</b> ${selectedOrder.customer_name}${selectedOrder.customer_phone ? ` - ${selectedOrder.customer_phone}` : ''}</p>`);
+    }
+    printWindow.document.write(`<p><b>البائع:</b> ${selectedOrder.salesperson_name}${sellerCode ? ` - كود: ${sellerCode}` : ''}</p>`);
+    if (branchEnabled && branchName) {
+      printWindow.document.write(`<p><b>الفرع:</b> ${branchName}</p>`);
+    }
+    printWindow.document.write('<table><thead><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>');
+    orderItems.forEach((item) => {
+      printWindow.document.write(`<tr><td>${item.product_name}</td><td>${item.quantity}</td><td>${item.unit_price} ج.م</td><td>${item.total_price} ج.م</td></tr>`);
+    });
+    printWindow.document.write(`</tbody></table><h2 style="text-align:left">الإجمالي: ${selectedOrder.total_final_price} ج.م</h2>`);
+    printWindow.document.write('<p style="text-align:center;margin-top:40px;color:#999">شكرا لتعاملكم مع كاربت لاند</p>');
+    printWindow.document.write('</body></html>');
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter((order) => {
+        const sellerCode = sellerMeta[order.salesperson_id]?.employee_code || '';
+        return (
+          order.order_number?.toString().includes(searchTerm) ||
+          (order.salesperson_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (order.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+          sellerCode.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }),
+    [orders, searchTerm, sellerMeta],
   );
+
+  const matchingProducts = useMemo(() => {
+    if (!productSearch.trim()) return [];
+    return products
+      .filter((product) => product.name.toLowerCase().includes(productSearch.toLowerCase()) || product.code.toLowerCase().includes(productSearch.toLowerCase()))
+      .slice(0, 6);
+  }, [productSearch, products]);
+
+  const sellerCodeForSelected = selectedOrder ? sellerMeta[selectedOrder.salesperson_id]?.employee_code : '';
 
   return (
     <div className="h-full flex flex-col lg:flex-row overflow-hidden bg-slate-50" dir="rtl">
-      {/* Sidebar - Pending Orders */}
-      <div className="w-full lg:w-[450px] bg-white border-l border-slate-100 flex flex-col shadow-xl z-20">
-        <div className="p-8 border-b border-slate-50 space-y-6">
-           <div className="flex items-center gap-4">
-             <div className="w-14 h-14 bg-blue-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-2xl shadow-blue-500/30 ring-4 ring-blue-50">
-               <CreditCard className="w-8 h-8" />
-             </div>
-             <div>
-               <h2 className="text-2xl font-black text-slate-800 tracking-tighter">صندوق المدفوعات</h2>
-               <p className="text-slate-400 text-xs font-black uppercase tracking-widest leading-none mt-1">المعاملات النشطة اليوم</p>
-             </div>
-           </div>
+      <div className="w-full lg:w-[430px] bg-white border-l border-slate-100 flex flex-col shadow-xl z-20">
+        <div className="p-6 border-b border-slate-50 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+              <CreditCard className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-800">الحسابات / الكاشير</h2>
+              <p className="text-slate-400 text-xs font-bold">الفواتير الواردة من البائعين</p>
+            </div>
+          </div>
 
-           <div className="relative group">
-              <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-              <input
-                type="text"
-                placeholder="ابحث برقم الفاتورة أو البائع..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pr-12 pl-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-100 outline-none font-bold transition-all"
-              />
-           </div>
+          {branchEnabled && branchName && (
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-900 flex items-center gap-2">
+              <Building2 className="w-4 h-4" /> {branchName}
+            </div>
+          )}
+
+          <div className="relative">
+            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              placeholder="ابحث برقم الفاتورة أو البائع أو كوده..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pr-12 pl-4 py-3 bg-slate-50 border rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-100"
+            />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-           {!activeShift && (
-              <div className="mb-6 p-6 bg-red-50 border border-red-100 rounded-[2rem] text-center">
-                 <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-3" />
-                 <h4 className="text-red-700 font-black mb-1">الوردية مغلقة!</h4>
-                 <p className="text-red-500 text-xs font-bold leading-relaxed">يرجى بدء وردية كاشير لتمكين تحصيل الفواتير</p>
-              </div>
-           )}
-
-           {loading ? (
-             <div className="flex flex-col items-center py-10 gap-3 opacity-20 animate-pulse">
-                <div className="w-12 h-12 border-4 border-slate-200 border-t-blue-500 rounded-full animate-spin"></div>
-                <span className="font-black text-slate-400">جاري التحديث...</span>
-             </div>
-           ) : (
-             filteredOrders.map(order => (
-               <div 
-                 key={order.id}
-                 onClick={() => { setSelectedOrder(order); fetchOrderItems(order.id); }}
-                 className={`group p-6 rounded-[2.5rem] border transition-all cursor-pointer relative overflow-hidden ${
-                   selectedOrder?.id === order.id 
-                   ? 'bg-blue-600 border-blue-600 shadow-2xl shadow-blue-500/30' 
-                   : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'
-                 }`}
-               >
-                 {selectedOrder?.id === order.id && (
-                   <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-bl-[4rem] -mr-8 -mt-8 rotate-12"></div>
-                 )}
-
-                 <div className="flex justify-between items-start mb-4 relative z-10">
-                   <div>
-                     <h4 className={`text-xl font-black ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>
-                       #{order.order_number}
-                     </h4>
-                     <p className={`text-xs font-bold ${selectedOrder?.id === order.id ? 'text-blue-100' : 'text-slate-400'}`}>
-                       {format(new Date(order.created_at), 'hh:mm a')} • {order.salesperson_name}
-                     </p>
-                   </div>
-                   <span className={`px-4 py-1.5 rounded-full text-[10px] font-black tracking-widest ${
-                     order.status === 'confirmed' ? 'bg-emerald-500 text-white' : 
-                     order.status === 'under_review' ? 'bg-amber-500 text-white' :
-                     selectedOrder?.id === order.id ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'
-                   }`}>
-                     {order.status === 'confirmed' ? 'محتمل' : 
-                      order.status === 'under_review' ? 'مراجعة' : 'جاهز'}
-                   </span>
-                 </div>
-
-                 <div className="flex items-end justify-between relative z-10">
-                    <span className={`text-2xl font-black tracking-tighter ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>
-                      {order.total_final_price} <small className="text-[10px] uppercase font-black opacity-60">ج.م</small>
-                    </span>
-                    <button className={`p-3 rounded-xl transition-all ${
-                      selectedOrder?.id === order.id ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-slate-50 text-slate-400'
-                    }`}>
-                      <ChevronRight className={`w-6 h-6 transition-transform ${selectedOrder?.id === order.id ? 'rotate-180' : ''}`} />
-                    </button>
-                 </div>
-               </div>
-             ))
-           )}
-        </div>
-
-        <div className="p-6 border-t border-slate-50">
-           <ShiftManager userId={sessionUser?.id} branchId={currentProfile?.branch_id || ''} />
-        </div>
-      </div>
-
-      {/* Detail Panel */}
-      <div className="flex-1 overflow-y-auto p-8 lg:p-12 pharaonic-pattern scroll-smooth custom-scrollbar">
-         {selectedOrder ? (
-           <div className="max-w-4xl mx-auto space-y-10 animate-fade-up">
-              {/* Header Card */}
-              <div className="bg-white rounded-[3.5rem] p-10 border border-slate-100 shadow-2xl relative overflow-hidden group">
-                 <div className="absolute top-0 left-0 w-4 h-full bg-blue-500"></div>
-                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-                    <div className="flex items-center gap-6">
-                       <div className="w-20 h-20 bg-slate-900 rounded-[2rem] flex items-center justify-center text-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform duration-500 shadow-slate-900/30">
-                          <Monitor className="w-10 h-10 text-amber-500" />
-                       </div>
-                       <div>
-                          <p className="text-slate-400 text-xs font-black uppercase tracking-widest mb-1 leading-none">تفاصيل الفاتورة الإلكترونية</p>
-                          <h1 className="text-3xl font-black text-slate-800 tracking-tighter">ORDER NO: {selectedOrder.order_number}</h1>
-                       </div>
-                    </div>
-                    <div className="flex gap-4">
-                       <button className="px-6 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black flex items-center gap-2 transition-all">
-                          <Printer className="w-5 h-5" /> طباعة
-                       </button>
-                       <button onClick={() => setSelectedOrder(null)} className="p-4 bg-red-50 text-red-500 rounded-2xl hover:bg-red-100 transition-all">
-                          <X className="w-6 h-6" />
-                       </button>
-                    </div>
-                 </div>
-
-                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-10 p-8 bg-slate-50/50 rounded-[2.5rem] border border-slate-100/50">
-                    <div className="space-y-1">
-                       <p className="text-slate-400 text-[10px] font-black uppercase">البائع</p>
-                       <p className="font-black text-slate-800 text-sm flex items-center gap-2"><User className="w-3 h-3 text-blue-500" /> {selectedOrder.salesperson_name}</p>
-                    </div>
-                    <div className="space-y-1">
-                       <p className="text-slate-400 text-[10px] font-black uppercase">رقم الوردية</p>
-                       <p className="font-black text-slate-800 text-sm">#SHT-102</p>
-                    </div>
-                    <div className="space-y-1">
-                       <p className="text-slate-400 text-[10px] font-black uppercase">الحالة</p>
-                       <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-500/10 text-blue-600 rounded-lg text-[10px] font-black">
-                          <Clock className="w-3 h-3" /> {selectedOrder.status === 'sent_to_cashier' ? 'بانتظار التحصيل' : 'تحت المراجعة'}
-                       </span>
-                    </div>
-                    <div className="space-y-1">
-                       <p className="text-slate-400 text-[10px] font-black uppercase">توقيت الإنشاء</p>
-                       <p className="font-black text-slate-800 text-sm">{format(new Date(selectedOrder.created_at), 'hh:mm:ss a')}</p>
-                    </div>
-                 </div>
-              </div>
-
-              {/* Items Table */}
-              <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl overflow-hidden">
-                 <div className="p-8 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                    <h3 className="font-black text-slate-800 flex items-center gap-3">
-                       <ShoppingCart className="w-5 h-5 text-blue-500" /> قائمة محتويات الفاتورة
-                    </h3>
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{orderItems.length} صنف</span>
-                 </div>
-                 <div className="overflow-x-auto">
-                    <table className="w-full text-right border-collapse">
-                       <thead>
-                          <tr className="border-b border-slate-50">
-                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">الصنف والوصف</th>
-                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">السعر</th>
-                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">الكمية</th>
-                             <th className="px-8 py-5 text-slate-400 text-[10px] font-black uppercase">الإجمالي</th>
-                          </tr>
-                       </thead>
-                       <tbody className="divide-y divide-slate-50">
-                          {orderItems.map(item => (
-                             <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
-                                <td className="px-8 py-6">
-                                   <p className="font-black text-slate-800 mb-0.5 group-hover:text-blue-600 transition-colors">{item.product_name}</p>
-                                   <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded font-black">ID: {item.product_id.split('-')[0]}</span>
-                                </td>
-                                <td className="px-8 py-6 font-black text-slate-700">{item.unit_price} ج.م</td>
-                                <td className="px-8 py-6">
-                                   <span className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-slate-800">{item.quantity}</span>
-                                </td>
-                                <td className="px-8 py-6">
-                                   <span className="font-black text-lg text-slate-900">{item.total_price} ج.م</span>
-                                </td>
-                             </tr>
-                          ))}
-                       </tbody>
-                    </table>
-                 </div>
-
-                 {/* Action Bar */}
-                 <div className="p-10 bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-8">
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {loading ? (
+            <div className="text-center py-10 text-slate-400 animate-pulse font-bold">جاري التحميل...</div>
+          ) : (
+            filteredOrders.map((order) => {
+              const sellerCode = sellerMeta[order.salesperson_id]?.employee_code;
+              return (
+                <div
+                  key={order.id}
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    fetchOrderItems(order.id);
+                  }}
+                  className={`p-5 rounded-2xl border cursor-pointer transition-all ${selectedOrder?.id === order.id ? 'bg-blue-600 border-blue-600 text-white shadow-xl' : 'bg-white border-slate-100 hover:border-blue-200 shadow-sm'}`}
+                >
+                  <div className="flex justify-between items-start mb-3">
                     <div>
-                       <p className="text-white/40 text-xs font-black uppercase tracking-widest mb-2">إجمالي المبلغ المطلوب تحصيله</p>
-                       <div className="flex items-end gap-3">
-                          <span className="text-5xl font-black tracking-tighter text-amber-500">{selectedOrder.total_final_price}</span>
-                          <span className="text-xl font-black text-white/60 mb-2">جنيه مصري</span>
-                       </div>
+                      <h4 className={`text-lg font-black ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>#{order.order_number}</h4>
+                      <p className={`text-xs font-bold ${selectedOrder?.id === order.id ? 'text-blue-100' : 'text-slate-400'}`}>
+                        {format(new Date(order.created_at), 'hh:mm a')} - {order.salesperson_name}
+                      </p>
+                      {sellerCode && <p className={`text-[11px] mt-1 font-black ${selectedOrder?.id === order.id ? 'text-blue-100' : 'text-blue-600'}`}>كود البائع: {sellerCode}</p>}
+                      {order.customer_name && <p className={`text-xs mt-1 ${selectedOrder?.id === order.id ? 'text-blue-200' : 'text-slate-400'}`}>{order.customer_name}</p>}
                     </div>
-
-                    <div className="flex gap-4 w-full md:w-auto">
-                       {selectedOrder.status !== 'confirmed' && (
-                         <>
-                            <button 
-                              onClick={() => markAsReview(selectedOrder)}
-                              className="flex-1 md:flex-none px-8 py-5 bg-white/10 hover:bg-white/20 text-white rounded-3xl font-black flex items-center justify-center gap-3 transition-all border border-white/10"
-                            >
-                               <Edit2 className="w-6 h-6" /> مراجعة و تعديل
-                            </button>
-                            <button
-                              onClick={() => markAsConfirmed(selectedOrder)}
-                              className="flex-1 md:flex-none px-12 py-5 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-3xl font-black flex items-center justify-center gap-3 transition-all shadow-xl shadow-amber-500/20 active:scale-95"
-                            >
-                               <CheckCircle className="w-6 h-6" /> تأكيد التحصيل
-                            </button>
-                         </>
-                       )}
-                    </div>
-                 </div>
-              </div>
-           </div>
-         ) : (
-           <div className="h-full flex flex-col items-center justify-center text-center opacity-30 select-none">
-              <div className="w-40 h-40 bg-white rounded-[4rem] flex items-center justify-center mb-8 shadow-2xl relative">
-                 <div className="absolute inset-0 border-4 border-dashed border-slate-200 rounded-[4rem] animate-spin-slow"></div>
-                 <ShoppingCart className="w-20 h-20 text-slate-200" />
-              </div>
-              <h2 className="text-4xl font-black text-slate-800 mb-4">في انتظار العمليات</h2>
-              <p className="text-slate-400 font-medium text-lg max-w-md leading-relaxed">
-                 اختر أحد الطلبات المعلقة من القائمة الجانبية لمباشرة عملية مراجعتها وتحصيل الأموال.
-              </p>
-           </div>
-         )}
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black ${order.status === 'confirmed' ? 'bg-emerald-500 text-white' : order.status === 'under_review' ? selectedOrder?.id === order.id ? 'bg-white/20 text-white' : 'bg-amber-50 text-amber-700' : selectedOrder?.id === order.id ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}>
+                      {order.status === 'confirmed' ? 'مدفوع' : order.status === 'under_review' ? 'قيد المراجعة' : 'جاهز'}
+                    </span>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <span className={`text-xl font-black ${selectedOrder?.id === order.id ? 'text-white' : 'text-slate-800'}`}>
+                      {order.total_final_price?.toLocaleString()} <small className="text-[10px] opacity-60">ج.م</small>
+                    </span>
+                    <ChevronRight className="w-5 h-5 opacity-40" />
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {!loading && filteredOrders.length === 0 && <p className="text-center py-10 text-slate-400 font-bold">لا توجد طلبات</p>}
+        </div>
       </div>
 
-      <style>{`
-        .pharaonic-pattern {
-          background-image: 
-            radial-gradient(circle at 2px 2px, rgba(0,0,0,0.03) 1px, transparent 0);
-          background-size: 24px 24px;
-        }
-        @keyframes spin-slow {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-        .animate-spin-slow {
-          animation: spin-slow 12s linear infinite;
-        }
-        @keyframes fade-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fade-up {
-          animation: fade-up 0.5s ease-out forwards;
-        }
-      `}</style>
+      <div className="flex-1 overflow-y-auto p-6 lg:p-10">
+        {selectedOrder ? (
+          <div className="max-w-5xl mx-auto space-y-8">
+            <div className="bg-white rounded-3xl p-8 border shadow-lg">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                  <p className="text-slate-400 text-xs font-black uppercase mb-1">تفاصيل الفاتورة</p>
+                  <h1 className="text-2xl font-black text-slate-800">طلب رقم: {selectedOrder.order_number}</h1>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={handlePrint} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold flex items-center gap-2">
+                    <Printer className="w-5 h-5" /> طباعة
+                  </button>
+                  <button onClick={() => setSelectedOrder(null)} className="p-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6 p-6 bg-slate-50 rounded-2xl">
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold">البائع</p>
+                  <p className="font-black text-slate-800 text-sm flex items-center gap-1"><User className="w-3 h-3 text-blue-500" /> {selectedOrder.salesperson_name}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold">كود البائع</p>
+                  <p className="font-black text-slate-800 text-sm">{sellerCodeForSelected || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold">العميل</p>
+                  <p className="font-black text-slate-800 text-sm">{selectedOrder.customer_name || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold">الهاتف</p>
+                  <p className="font-black text-slate-800 text-sm">{selectedOrder.customer_phone || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold">التوقيت</p>
+                  <p className="font-black text-slate-800 text-sm">{format(new Date(selectedOrder.created_at), 'HH:mm - yyyy/MM/dd')}</p>
+                </div>
+              </div>
+
+              {selectedOrder.notes && <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-100"><p className="text-sm text-amber-800 font-bold">{selectedOrder.notes}</p></div>}
+            </div>
+
+            {selectedOrder.status !== 'confirmed' && (
+              <div className="bg-white rounded-3xl border shadow-lg p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <ScanSearch className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-slate-800">إضافة صنف إلى الفاتورة</h3>
+                    <p className="text-slate-500 text-sm">أي تعديل هنا سيحوّل الطلب إلى حالة "قيد المراجعة" حتى تأكيد الكاشير.</p>
+                  </div>
+                </div>
+
+                <div className="relative mb-4">
+                  <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="ابحث بكود المنتج أو الاسم لإضافته..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="w-full pr-12 pl-4 py-3 bg-slate-50 border rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+
+                {matchingProducts.length > 0 && (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {matchingProducts.map((product) => (
+                      <button key={product.id} onClick={() => addProductToOrder(product)} className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right hover:border-blue-200 hover:bg-blue-50 transition-all">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-black text-slate-800 line-clamp-1">{product.name}</p>
+                            <p className="text-[11px] font-bold text-slate-400 mt-1">{product.code}</p>
+                          </div>
+                          <span className="rounded-xl bg-white px-3 py-1 text-[11px] font-black text-blue-600 shadow-sm">{(product.price_sell_after || product.price_sell_before).toLocaleString()} ج.م</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {productSearch.trim() && matchingProducts.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-slate-400 font-bold">
+                    لا توجد منتجات مطابقة لهذا البحث
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div id="invoice-print" className="bg-white rounded-3xl border shadow-lg overflow-hidden">
+              <div className="p-6 bg-slate-50 border-b flex items-center justify-between">
+                <h3 className="font-black text-slate-800 flex items-center gap-2"><ShoppingCart className="w-5 h-5 text-blue-500" /> محتويات الفاتورة</h3>
+                <span className="text-xs font-bold text-slate-400">{orderItems.length} صنف</span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-right">
+                  <thead>
+                    <tr className="border-b border-slate-50">
+                      <th className="px-6 py-4 text-slate-400 text-[10px] font-bold">المنتج</th>
+                      <th className="px-6 py-4 text-slate-400 text-[10px] font-bold">السعر</th>
+                      <th className="px-6 py-4 text-slate-400 text-[10px] font-bold">الكمية</th>
+                      <th className="px-6 py-4 text-slate-400 text-[10px] font-bold">الإجمالي</th>
+                      {selectedOrder.status !== 'confirmed' && <th className="px-6 py-4 text-slate-400 text-[10px] font-bold">إجراء</th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {orderItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/50">
+                        <td className="px-6 py-4"><p className="font-bold text-slate-800">{item.product_name}</p></td>
+                        <td className="px-6 py-4 font-bold text-slate-700">{item.unit_price} ج.م</td>
+                        <td className="px-6 py-4">
+                          {selectedOrder.status !== 'confirmed' ? (
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => updateItemQuantity(item.id, item.quantity - 1)} className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center hover:bg-slate-200"><Minus className="w-3 h-3" /></button>
+                              <span className="w-8 text-center font-black">{item.quantity}</span>
+                              <button onClick={() => updateItemQuantity(item.id, item.quantity + 1)} className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center hover:bg-slate-200"><Plus className="w-3 h-3" /></button>
+                            </div>
+                          ) : <span className="font-black">{item.quantity}</span>}
+                        </td>
+                        <td className="px-6 py-4 font-black text-slate-900">{item.total_price} ج.م</td>
+                        {selectedOrder.status !== 'confirmed' && (
+                          <td className="px-6 py-4">
+                            <button onClick={() => removeItem(item.id)} className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-8 bg-slate-900 text-white flex flex-col md:flex-row items-center justify-between gap-6">
+                <div className="space-y-1">
+                  <p className="text-white/40 text-xs font-bold uppercase">إجمالي المبلغ</p>
+                  <span className="text-4xl font-black text-amber-500">{selectedOrder.total_final_price?.toLocaleString()}</span>
+                  <span className="text-lg font-bold text-white/60 mr-2">ج.م</span>
+                  {selectedOrder.total_original_price > selectedOrder.total_final_price && (
+                    <p className="text-[11px] font-black text-emerald-300">الخصم الحالي: {(selectedOrder.total_original_price - selectedOrder.total_final_price).toLocaleString()} ج.م</p>
+                  )}
+                </div>
+
+                {selectedOrder.status !== 'confirmed' ? (
+                  <div className="flex gap-3 w-full md:w-auto">
+                    <button onClick={() => cancelOrder(selectedOrder)} className="flex-1 md:flex-none px-6 py-4 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-2xl font-bold flex items-center justify-center gap-2 border border-red-500/20">
+                      <X className="w-5 h-5" /> إلغاء
+                    </button>
+                    <button onClick={() => markAsConfirmed(selectedOrder)} className="flex-1 md:flex-none px-10 py-4 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-2xl font-black flex items-center justify-center gap-2 shadow-xl active:scale-95">
+                      <CheckCircle className="w-5 h-5" /> تأكيد التحصيل
+                    </button>
+                  </div>
+                ) : (
+                  <span className="px-6 py-3 bg-emerald-500/20 text-emerald-400 rounded-xl font-black flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5" /> تم الدفع بنجاح
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+            <ShoppingCart className="w-20 h-20 text-slate-200 mb-6" />
+            <h2 className="text-3xl font-black text-slate-800 mb-3">في انتظار العمليات</h2>
+            <p className="text-slate-400 font-medium text-lg max-w-md">اختر فاتورة من القائمة لمراجعتها وتحصيلها أو إضافة أصناف عليها</p>
+            <div className="mt-5 rounded-2xl bg-white border border-slate-100 px-5 py-4 shadow-sm flex items-center gap-3">
+              <BadgeInfo className="w-5 h-5 text-blue-500" />
+              <span className="text-sm font-bold text-slate-600">التعديلات التي يقوم بها الكاشير تظهر للبائع في متابعة مبيعاتي.</span>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
