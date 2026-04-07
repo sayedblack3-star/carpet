@@ -28,8 +28,52 @@ const TABS = [
 
 const AUTH_BOOTSTRAP_TIMEOUT_MS = 12000;
 const AUTH_BOOTSTRAP_TIMEOUT_MESSAGE = 'Timed out while restoring the current session.';
-const PROFILE_LOAD_TIMEOUT_MS = 20000;
+const PROFILE_LOAD_TIMEOUT_MS = 30000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
+const PROFILE_CACHE_KEY = 'carpet-land-profile-cache-v1';
+
+const readCachedProfile = (userId: string): Profile | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+
+    const cache = JSON.parse(raw) as Record<string, Profile>;
+    return cache[userId] || null;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedProfile = (profile: Profile) => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
+    const cache = raw ? (JSON.parse(raw) as Record<string, Profile>) : {};
+    cache[profile.id] = profile;
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore cache write failures to keep auth flow resilient.
+  }
+};
+
+const clearCachedProfile = (userId?: string | null) => {
+  if (typeof window === 'undefined' || !userId) return;
+
+  try {
+    const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return;
+
+    const cache = JSON.parse(raw) as Record<string, Profile>;
+    delete cache[userId];
+    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // Ignore cache cleanup failures.
+  }
+};
+
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -105,6 +149,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     profileRef.current = profile;
+    if (profile) writeCachedProfile(profile);
   }, [profile]);
 
   useEffect(() => {
@@ -215,6 +260,7 @@ const App: React.FC = () => {
     const email = user.email || '';
     const adminUser = isAdminEmail(email);
     const currentProfile = profileRef.current;
+    const cachedProfile = currentProfile?.id === user.id ? currentProfile : readCachedProfile(user.id);
 
     try {
       const { data, error } = await withTimeout(
@@ -259,18 +305,19 @@ const App: React.FC = () => {
         return;
       }
 
-      if (
-        isProfileTimeout &&
-        options.preserveCurrentProfileOnTimeout &&
-        currentProfile &&
-        currentProfile.id === user.id
-      ) {
-        console.warn('Profile refresh timed out, keeping cached profile.', err);
-        setProfile(currentProfile);
+      if (isProfileTimeout && cachedProfile && cachedProfile.id === user.id) {
+        console.warn('Profile refresh timed out, keeping cached profile.');
+        setProfile(cachedProfile);
         return;
       }
 
-      console.error('Error fetching profile:', err);
+      if (isProfileTimeout) {
+        console.warn('Profile fetch timed out without cached profile.');
+      } else {
+        console.error('Error fetching profile:', err);
+      }
+
+      clearCachedProfile(user.id);
       toast.error(`خطأ في تحميل بيانات الملف الشخصي: ${err.message || 'Error'}`);
       setProfile(null);
     } finally {
@@ -280,6 +327,7 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    clearCachedProfile(session?.user?.id || profile?.id);
     setProfile(null);
     toast.success('تم تسجيل الخروج بنجاح');
   };
