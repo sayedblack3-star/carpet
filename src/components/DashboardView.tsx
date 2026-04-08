@@ -1,12 +1,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase';
 import { Branch, Order, OrderItem, Product, Profile, Shift } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Users, DollarSign, Package, ShoppingCart, AlertCircle, Clock, CheckCircle } from 'lucide-react';
-import { subDays, startOfDay, format } from 'date-fns';
+import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Activity,
+  AlertCircle,
+  ArrowUpRight,
+  Building2,
+  CheckCircle2,
+  Clock3,
+  DollarSign,
+  Package,
+  RotateCw,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  Store,
+  TrendingUp,
+  UserCheck,
+  Users,
+} from 'lucide-react';
+import { format, startOfDay, subDays } from 'date-fns';
 
 const QUERY_TIMEOUT_MS = 6000;
 const QUERY_RETRY_DELAY_MS = 700;
+
+type DateRange = 'today' | 'week' | 'month' | 'all';
+type StatTone = 'blue' | 'emerald' | 'amber' | 'slate' | 'rose';
+
+const DATE_RANGE_LABELS: Record<DateRange, string> = {
+  today: 'اليوم',
+  week: '7 أيام',
+  month: '30 يوم',
+  all: 'كل الفترة',
+};
+
+const formatMoney = (value: number) => `${Math.round(value || 0).toLocaleString()} ج.م`;
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -49,6 +78,60 @@ const queryWithRetry = async <T,>(runQuery: () => Promise<T>, retries = 1): Prom
   }
 };
 
+const toneStyles: Record<StatTone, string> = {
+  blue: 'border-blue-100 bg-blue-50 text-blue-700',
+  emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
+  amber: 'border-amber-100 bg-amber-50 text-amber-700',
+  slate: 'border-slate-200 bg-slate-100 text-slate-700',
+  rose: 'border-rose-100 bg-rose-50 text-rose-700',
+};
+
+type StatTileProps = {
+  icon: React.ElementType;
+  title: string;
+  value: string;
+  caption: string;
+  tone: StatTone;
+  trend?: string;
+};
+
+const StatTile = ({ icon: Icon, title, value, caption, tone, trend }: StatTileProps) => (
+  <div className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-26px_rgba(15,23,42,0.35)]">
+    <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
+    <div className="flex items-start justify-between gap-4">
+      <div className={`flex h-14 w-14 items-center justify-center rounded-[1.4rem] border ${toneStyles[tone]}`}>
+        <Icon className="h-6 w-6" />
+      </div>
+      {trend ? (
+        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black text-slate-600">
+          <ArrowUpRight className="h-3.5 w-3.5" />
+          {trend}
+        </span>
+      ) : null}
+    </div>
+    <div className="mt-5">
+      <p className="text-xs font-black tracking-[0.18em] text-slate-400">{title}</p>
+      <p className="mt-3 text-3xl font-black text-slate-900">{value}</p>
+      <p className="mt-2 text-sm font-bold text-slate-500">{caption}</p>
+    </div>
+  </div>
+);
+
+const SectionCard = ({ title, subtitle, icon: Icon, children }: { title: string; subtitle?: string; icon: React.ElementType; children: React.ReactNode }) => (
+  <section className="rounded-[2.2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)] sm:p-7">
+    <div className="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">
+          <Icon className="h-5 w-5 text-amber-500" />
+          {title}
+        </h3>
+        {subtitle ? <p className="mt-2 text-sm font-bold text-slate-500">{subtitle}</p> : null}
+      </div>
+    </div>
+    {children}
+  </section>
+);
+
 const DashboardView: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -58,10 +141,17 @@ const DashboardView: React.FC = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('month');
+  const [dateRange, setDateRange] = useState<DateRange>('month');
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchData = async (isManualRefresh = false) => {
+    if (isManualRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
     setLoadError(null);
 
     let ordersQuery = supabase.from('orders').select('*');
@@ -84,9 +174,12 @@ const DashboardView: React.FC = () => {
       queryWithRetry(() => Promise.resolve(supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name'))),
     ]);
 
-    const failedResults = [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult].filter((result) => result.status === 'rejected');
+    const failedResults = [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult].filter(
+      (result) => result.status === 'rejected',
+    );
+
     if (failedResults.length > 0) {
-      setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. تم الاحتفاظ بالعرض وسيتم إعادة المحاولة تلقائيًا.');
+      setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. البيانات المعروضة قد تكون أقدم قليلًا وسيتم التحديث تلقائيًا.');
     }
 
     if (ordersResult.status === 'fulfilled' && !ordersResult.value.error) {
@@ -125,6 +218,8 @@ const DashboardView: React.FC = () => {
       setBranches([]);
     }
 
+    setLastUpdated(format(new Date(), 'HH:mm'));
+    setRefreshing(false);
     setLoading(false);
   };
 
@@ -145,251 +240,472 @@ const DashboardView: React.FC = () => {
   const lowStock = products.filter((product) => product.stock_quantity <= product.min_stock_level && product.is_active);
   const sellers = users.filter((user) => user.role === 'seller');
   const cashiers = users.filter((user) => user.role === 'cashier');
+  const pendingApprovals = users.filter((user) => !user.is_approved).length;
+  const inactiveUsers = users.filter((user) => !user.is_active).length;
   const activeShifts = shifts.filter((shift) => shift.status === 'active');
-  const closedToday = shifts.filter((shift) => shift.status === 'closed' && shift.end_time && new Date(shift.end_time) >= startOfDay(new Date()));
+  const closedToday = shifts.filter(
+    (shift) => shift.status === 'closed' && shift.end_time && new Date(shift.end_time) >= startOfDay(new Date()),
+  );
+  const fulfillmentRate = orders.length > 0 ? Math.round((confirmed.length / orders.length) * 100) : 0;
+  const inventoryCoverage = products.length > 0 ? Math.max(0, Math.round(((products.length - lowStock.length) / products.length) * 100)) : 100;
   const confirmedOrderIds = new Set(confirmed.map((order) => order.id));
-  const topProducts = Object.values(
-    orderItems
-      .filter((item) => confirmedOrderIds.has(item.order_id))
-      .reduce<Record<string, { product_name: string; quantity: number; revenue: number }>>((acc, item) => {
-        const key = item.product_id || item.product_name;
-        if (!acc[key]) {
-          acc[key] = { product_name: item.product_name, quantity: 0, revenue: 0 };
-        }
-        acc[key].quantity += item.quantity || 0;
-        acc[key].revenue += item.total_price || 0;
-        return acc;
-      }, {}),
-  )
-    .sort((left, right) => right.revenue - left.revenue)
-    .slice(0, 5);
-  const branchNames = branches.reduce<Record<string, string>>((acc, branch) => {
-    acc[branch.id] = branch.name;
-    return acc;
-  }, {});
-  const branchPerformance = Object.values(
-    confirmed.reduce<Record<string, { branch_id: string; name: string; orders: number; revenue: number }>>((acc, order) => {
-      const key = order.branch_id || 'unassigned';
-      if (!acc[key]) {
-        acc[key] = {
-          branch_id: key,
-          name: order.branch_id ? branchNames[order.branch_id] || 'فرع غير معروف' : 'بدون فرع',
-          orders: 0,
-          revenue: 0,
-        };
-      }
 
-      acc[key].orders += 1;
-      acc[key].revenue += order.total_final_price || 0;
-      return acc;
-    }, {}),
-  ).sort((left, right) => right.revenue - left.revenue);
-
-  const last7Days = Array.from({ length: 7 }, (_, index) => {
-    const day = subDays(new Date(), 6 - index);
-    const dayKey = format(day, 'MM/dd');
-    const sales = confirmed
-      .filter((order) => format(new Date(order.created_at), 'MM/dd') === dayKey)
-      .reduce((sum, order) => sum + (order.total_final_price || 0), 0);
-
-    return { name: dayKey, sales };
-  });
-
-  const StatCard = ({ icon: Icon, label, value, sub, color }: any) => (
-    <div className="bg-white p-5 sm:p-6 rounded-3xl shadow-lg border border-slate-50 flex items-center gap-4 sm:gap-5">
-      <div className={`w-14 h-14 ${color} rounded-2xl flex items-center justify-center shrink-0`}>
-        <Icon className="w-7 h-7" />
-      </div>
-      <div>
-        <p className="text-xs font-bold text-slate-400 mb-1">{label}</p>
-        <h3 className="text-xl sm:text-2xl font-black text-slate-800">
-          {value} <span className="text-xs text-slate-400">{sub}</span>
-        </h3>
-      </div>
-    </div>
+  const topProducts = useMemo(
+    () =>
+      Object.values(
+        orderItems
+          .filter((item) => confirmedOrderIds.has(item.order_id))
+          .reduce<Record<string, { product_name: string; quantity: number; revenue: number }>>((acc, item) => {
+            const key = item.product_id || item.product_name;
+            if (!acc[key]) {
+              acc[key] = { product_name: item.product_name, quantity: 0, revenue: 0 };
+            }
+            acc[key].quantity += item.quantity || 0;
+            acc[key].revenue += item.total_price || 0;
+            return acc;
+          }, {}),
+      )
+        .sort((left, right) => right.revenue - left.revenue)
+        .slice(0, 5),
+    [confirmedOrderIds, orderItems],
   );
 
+  const branchNames = useMemo(
+    () =>
+      branches.reduce<Record<string, string>>((acc, branch) => {
+        acc[branch.id] = branch.name;
+        return acc;
+      }, {}),
+    [branches],
+  );
+
+  const branchPerformance = useMemo(
+    () =>
+      Object.values(
+        confirmed.reduce<Record<string, { branch_id: string; name: string; orders: number; revenue: number }>>((acc, order) => {
+          const key = order.branch_id || 'unassigned';
+          if (!acc[key]) {
+            acc[key] = {
+              branch_id: key,
+              name: order.branch_id ? branchNames[order.branch_id] || 'فرع غير معروف' : 'بدون فرع',
+              orders: 0,
+              revenue: 0,
+            };
+          }
+
+          acc[key].orders += 1;
+          acc[key].revenue += order.total_final_price || 0;
+          return acc;
+        }, {}),
+      ).sort((left, right) => right.revenue - left.revenue),
+    [branchNames, confirmed],
+  );
+
+  const last7Days = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, index) => {
+        const day = subDays(new Date(), 6 - index);
+        const dayKey = format(day, 'MM/dd');
+        const sales = confirmed
+          .filter((order) => format(new Date(order.created_at), 'MM/dd') === dayKey)
+          .reduce((sum, order) => sum + (order.total_final_price || 0), 0);
+
+        return { name: dayKey, sales };
+      }),
+    [confirmed],
+  );
+
+  const spotlight = useMemo(() => {
+    const leadingBranch = branchPerformance[0];
+    const strongestProduct = topProducts[0];
+
+    return [
+      {
+        icon: Store,
+        title: 'الفرع الأقوى حاليًا',
+        value: leadingBranch ? leadingBranch.name : 'لا توجد مبيعات مؤكدة',
+        note: leadingBranch ? `${formatMoney(leadingBranch.revenue)} من ${leadingBranch.orders} طلبات` : 'ابدأ الفترة الحالية بأول طلب مؤكد',
+      },
+      {
+        icon: Package,
+        title: 'المنتج الأبرز',
+        value: strongestProduct ? strongestProduct.product_name : 'لا توجد بيانات كافية',
+        note: strongestProduct ? `${strongestProduct.quantity} قطعة • ${formatMoney(strongestProduct.revenue)}` : 'سيظهر هنا أفضل منتج بعد أول عملية بيع مؤكدة',
+      },
+      {
+        icon: ShieldCheck,
+        title: 'جاهزية التشغيل',
+        value: `${inventoryCoverage}%`,
+        note: lowStock.length > 0 ? `${lowStock.length} منتج يحتاج متابعة مخزون` : 'المخزون تحت السيطرة في الوقت الحالي',
+      },
+    ];
+  }, [branchPerformance, inventoryCoverage, lowStock.length, topProducts]);
+
+  const latestShift = shifts[0];
+
   return (
-    <div className="p-4 sm:p-8 max-w-7xl mx-auto min-h-full" dir="rtl">
-      <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-800 flex items-center gap-3">
-            <TrendingUp className="w-8 h-8 text-blue-600" />
-            لوحة التحكم
-          </h1>
-          <p className="text-slate-500 font-medium mt-1">متابعة الأداء في الوقت الفعلي</p>
-        </div>
+    <div className="min-h-full px-4 py-4 sm:px-6 sm:py-8" dir="rtl">
+      <div className="mx-auto flex max-w-7xl flex-col gap-8">
+        <section className="relative overflow-hidden rounded-[2.8rem] border border-white/20 bg-[#120b07] px-6 py-7 text-white shadow-[0_40px_120px_-42px_rgba(15,23,42,0.9)] sm:px-8 sm:py-9">
+          <div
+            className="absolute inset-0 opacity-80"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at top right, rgba(245,158,11,0.24), transparent 24%), radial-gradient(circle at bottom left, rgba(14,165,233,0.16), transparent 32%), linear-gradient(135deg, rgba(255,255,255,0.05), transparent 48%)',
+            }}
+          />
+          <div className="absolute -left-12 top-8 h-36 w-36 rounded-full bg-amber-500/10 blur-3xl" />
+          <div className="absolute bottom-0 right-0 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl" />
 
-        <div className="grid grid-cols-2 sm:flex bg-white p-1.5 rounded-2xl border shadow-sm gap-1 w-full sm:w-auto">
-          {(['today', 'week', 'month', 'all'] as const).map((range) => (
-            <button
-              key={range}
-              onClick={() => setDateRange(range)}
-              className={`px-4 sm:px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                dateRange === range ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              {range === 'today' ? 'اليوم' : range === 'week' ? 'أسبوع' : range === 'month' ? 'شهر' : 'الكل'}
-            </button>
-          ))}
-        </div>
-      </header>
+          <div className="relative grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black tracking-[0.18em] text-amber-100">
+                  <Sparkles className="h-4 w-4 text-amber-300" />
+                  CARPET LAND CONTROL CENTER
+                </span>
+                {lastUpdated ? (
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/80">
+                    <Clock3 className="h-4 w-4 text-white/60" />
+                    آخر تحديث {lastUpdated}
+                  </span>
+                ) : null}
+              </div>
 
-      {loadError && (
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
-          {loadError}
-        </div>
-      )}
+              <div className="mt-6 max-w-3xl">
+                <h1 className="text-3xl font-black leading-tight sm:text-4xl xl:text-[2.8rem]">
+                  لوحة قيادة أوضح لاتخاذ القرار أسرع في المبيعات والتشغيل.
+                </h1>
+                <p className="mt-4 max-w-2xl text-sm font-bold leading-7 text-white/75 sm:text-base">
+                  المؤشرات الأهم، حالة التشغيل، وأداء الفروع في واجهة واحدة أنظف، بحيث تعرف أين البيع يتحرك وأين تحتاج تدخل خلال ثوانٍ.
+                </p>
+              </div>
 
-      {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {[1, 2, 3, 4].map((card) => (
-            <div key={card} className="h-32 bg-white/50 animate-pulse rounded-3xl border" />
-          ))}
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            <StatCard icon={DollarSign} label="إجمالي الإيرادات" value={totalRevenue.toLocaleString()} sub="ج.م" color="bg-blue-50 text-blue-600" />
-            <StatCard icon={ShoppingCart} label="الفواتير المحصلة" value={confirmed.length} sub="فاتورة" color="bg-emerald-50 text-emerald-600" />
-            <StatCard icon={Clock} label="طلبات معلقة" value={pending.length} sub="طلب" color="bg-amber-50 text-amber-600" />
-            <StatCard icon={Package} label="إجمالي المنتجات" value={products.length} sub="منتج" color="bg-purple-50 text-purple-600" />
-          </div>
+              <div className="mt-7 flex flex-wrap gap-3">
+                {(['today', 'week', 'month', 'all'] as const).map((range) => (
+                  <button
+                    key={range}
+                    onClick={() => setDateRange(range)}
+                    className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                      dateRange === range
+                        ? 'bg-white text-slate-900 shadow-lg'
+                        : 'border border-white/10 bg-white/5 text-white/75 hover:bg-white/10'
+                    }`}
+                  >
+                    {DATE_RANGE_LABELS[range]}
+                  </button>
+                ))}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            <StatCard icon={Users} label="البائعين" value={sellers.length} sub="بائع" color="bg-indigo-50 text-indigo-600" />
-            <StatCard icon={Users} label="الكاشير" value={cashiers.length} sub="كاشير" color="bg-pink-50 text-pink-600" />
-            <StatCard icon={DollarSign} label="متوسط الفاتورة" value={Math.round(avgOrder).toLocaleString()} sub="ج.م" color="bg-teal-50 text-teal-600" />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            <StatCard icon={Clock} label="الورديات المفتوحة" value={activeShifts.length} sub="وردية" color="bg-orange-50 text-orange-600" />
-            <StatCard icon={CheckCircle} label="ورديات مغلقة اليوم" value={closedToday.length} sub="وردية" color="bg-emerald-50 text-emerald-600" />
-            <StatCard icon={Package} label="الفروع النشطة" value={branches.length} sub="فرع" color="bg-cyan-50 text-cyan-600" />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border min-w-0">
-              <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-2">
-                <TrendingUp className="w-6 h-6 text-blue-500" />
-                المبيعات آخر 7 أيام
-              </h3>
-              <ResponsiveContainer width="100%" height={288}>
-                <BarChart data={last7Days}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 700 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                  <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px rgba(0,0,0,0.1)' }} />
-                  <Bar dataKey="sales" fill="#3b82f6" radius={[8, 8, 0, 0]} barSize={40} name="المبيعات" />
-                </BarChart>
-              </ResponsiveContainer>
+                <button
+                  onClick={() => void fetchData(true)}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-white/80 transition hover:bg-white/10"
+                >
+                  <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  تحديث الآن
+                </button>
+              </div>
             </div>
 
-            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border">
-              <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                <Clock className="w-6 h-6 text-amber-500" />
-                آخر الطلبات
-              </h3>
-              <div className="space-y-3 max-h-72 overflow-y-auto">
-                {orders.slice(0, 8).map((order) => (
-                  <div key={order.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${order.status === 'confirmed' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                        {order.status === 'confirmed' ? <CheckCircle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                      </div>
+            <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+              {spotlight.map((item) => (
+                <div
+                  key={item.title}
+                  className="rounded-[1.9rem] border border-white/10 bg-white/10 p-5 backdrop-blur-xl"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-[1.2rem] bg-white/10 text-amber-300">
+                      <item.icon className="h-5 w-5" />
+                    </div>
+                    <Activity className="h-5 w-5 text-white/25" />
+                  </div>
+                  <p className="mt-4 text-xs font-black tracking-[0.14em] text-white/55">{item.title}</p>
+                  <p className="mt-2 text-lg font-black leading-7 text-white">{item.value}</p>
+                  <p className="mt-2 text-sm font-bold leading-6 text-white/70">{item.note}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {loadError ? (
+          <div className="rounded-[1.8rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-bold text-amber-900">
+            {loadError}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+            {[1, 2, 3, 4].map((card) => (
+              <div key={card} className="h-40 animate-pulse rounded-[2rem] border border-slate-100 bg-white/70" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+              <StatTile
+                icon={DollarSign}
+                title="إجمالي الإيراد"
+                value={formatMoney(totalRevenue)}
+                caption={`خلال ${DATE_RANGE_LABELS[dateRange]}`}
+                tone="blue"
+                trend={`${confirmed.length} فواتير مؤكدة`}
+              />
+              <StatTile
+                icon={ShoppingCart}
+                title="الطلبات المعلقة"
+                value={pending.length.toLocaleString()}
+                caption="تحتاج تدخل الكاشير أو مراجعة"
+                tone="amber"
+                trend={orders.length > 0 ? `${fulfillmentRate}% معدل الإغلاق` : 'لا توجد حركة بعد'}
+              />
+              <StatTile
+                icon={UserCheck}
+                title="الفريق النشط"
+                value={(sellers.length + cashiers.length).toLocaleString()}
+                caption={`${sellers.length} بائع • ${cashiers.length} كاشير`}
+                tone="emerald"
+                trend={pendingApprovals > 0 ? `${pendingApprovals} بانتظار التفعيل` : 'كل الحسابات الأساسية جاهزة'}
+              />
+              <StatTile
+                icon={Package}
+                title="المخزون تحت الضغط"
+                value={lowStock.length.toLocaleString()}
+                caption={`${products.length} منتج ظاهر في النظام`}
+                tone={lowStock.length > 0 ? 'rose' : 'slate'}
+                trend={inventoryCoverage > 0 ? `${inventoryCoverage}% تغطية آمنة` : 'يحتاج مراجعة عاجلة'}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_0.9fr]">
+              <SectionCard title="منحنى المبيعات" subtitle="حركة آخر 7 أيام بشكل سريع وواضح." icon={TrendingUp}>
+                <div className="h-80 min-w-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={last7Days}>
+                      <defs>
+                        <linearGradient id="salesGradient" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="0%" stopColor="#f59e0b" />
+                          <stop offset="100%" stopColor="#0f172a" />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="#eef2f7" vertical={false} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          borderRadius: '18px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 18px 40px rgba(15,23,42,0.12)',
+                        }}
+                        formatter={(value: number) => [formatMoney(value), 'المبيعات']}
+                      />
+                      <Bar dataKey="sales" fill="url(#salesGradient)" radius={[12, 12, 4, 4]} barSize={34} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </SectionCard>
+
+              <SectionCard title="نبض التشغيل" subtitle="لقطات سريعة تساعدك تعرف أين تركز الآن." icon={ShieldCheck}>
+                <div className="space-y-4">
+                  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
                       <div>
-                        <p className="font-bold text-slate-800 text-sm">طلب #{order.order_number}</p>
-                        <p className="text-[10px] text-slate-400">{order.salesperson_name || 'موظف'}</p>
+                        <p className="text-xs font-black tracking-[0.16em] text-slate-400">متوسط الفاتورة</p>
+                        <p className="mt-2 text-2xl font-black text-slate-900">{formatMoney(avgOrder)}</p>
                       </div>
-                    </div>
-                    <div className="text-left">
-                      <p className="font-black text-slate-700 text-sm">{order.total_final_price} ج.م</p>
-                      <span className={`text-[10px] font-bold ${order.status === 'confirmed' ? 'text-emerald-500' : 'text-amber-500'}`}>
-                        {order.status === 'confirmed' ? 'مدفوع' : 'معلق'}
-                      </span>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-white text-blue-600 shadow-sm">
+                        <DollarSign className="h-5 w-5" />
+                      </div>
                     </div>
                   </div>
-                ))}
 
-                {orders.length === 0 && <p className="text-center text-slate-400 py-8 font-bold">لا توجد طلبات في هذه الفترة</p>}
-              </div>
-            </div>
-          </div>
-
-          {lowStock.length > 0 && (
-            <div className="bg-amber-50 p-5 sm:p-8 rounded-3xl border border-amber-200 mb-10">
-              <h3 className="text-lg font-black text-amber-800 mb-4 flex items-center gap-2">
-                <AlertCircle className="w-6 h-6" />
-                تنبيهات المخزون المنخفض ({lowStock.length})
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {lowStock.slice(0, 6).map((product) => (
-                  <div key={product.id} className="bg-white p-4 rounded-2xl border border-amber-100 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-800 text-sm">{product.name}</p>
-                      <p className="text-xs text-slate-400">كود: {product.code}</p>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+                    <div className="rounded-[1.6rem] border border-emerald-100 bg-emerald-50 p-4">
+                      <p className="text-xs font-black tracking-[0.16em] text-emerald-600">الورديات المفتوحة</p>
+                      <p className="mt-2 text-2xl font-black text-emerald-900">{activeShifts.length}</p>
+                      <p className="mt-2 text-sm font-bold text-emerald-700">
+                        {closedToday.length} ورديات أغلقت اليوم
+                      </p>
                     </div>
-                    <span className="text-amber-600 font-black text-lg">{product.stock_quantity}</span>
+                    <div className="rounded-[1.6rem] border border-blue-100 bg-blue-50 p-4">
+                      <p className="text-xs font-black tracking-[0.16em] text-blue-600">الفروع النشطة</p>
+                      <p className="mt-2 text-2xl font-black text-blue-900">{branches.length}</p>
+                      <p className="mt-2 text-sm font-bold text-blue-700">
+                        {inactiveUsers} حسابات غير نشطة تحتاج مراجعة
+                      </p>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border">
-              <h3 className="text-xl font-black text-slate-800 mb-6">أفضل المنتجات في الفترة</h3>
-              <div className="space-y-3">
-                {topProducts.length > 0 ? (
-                  topProducts.map((product, index) => (
-                    <div key={product.product_name} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 font-black">
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p className="font-black text-slate-800 text-sm">{product.product_name}</p>
-                          <p className="text-[11px] font-bold text-slate-400">عدد القطع: {product.quantity}</p>
-                        </div>
+                  <div className="rounded-[1.6rem] border border-amber-100 bg-[linear-gradient(135deg,#fff7ed_0%,#fffbeb_100%)] p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black tracking-[0.16em] text-amber-700">آخر وردية مرصودة</p>
+                        <p className="mt-2 text-base font-black text-slate-900">
+                          {latestShift ? format(new Date(latestShift.start_time), 'yyyy-MM-dd HH:mm') : 'لا توجد ورديات حديثة'}
+                        </p>
+                        <p className="mt-2 text-sm font-bold text-amber-800">
+                          {latestShift ? `الحالة: ${latestShift.status === 'active' ? 'نشطة' : 'مغلقة'}` : 'ابدأ أول وردية لتظهر هنا'}
+                        </p>
                       </div>
-                      <div className="text-left">
-                        <p className="font-black text-slate-900">{Math.round(product.revenue).toLocaleString()} ج.م</p>
-                        <p className="text-[11px] font-bold text-slate-400">إيراد</p>
+                      <div className="flex h-11 w-11 items-center justify-center rounded-[1.2rem] bg-white text-amber-500 shadow-sm">
+                        <Clock3 className="h-5 w-5" />
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <p className="py-8 text-center font-bold text-slate-400">لا توجد بيانات كافية لعرض أفضل المنتجات في هذه الفترة.</p>
-                )}
-              </div>
+                  </div>
+                </div>
+              </SectionCard>
             </div>
 
-            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border">
-              <h3 className="text-xl font-black text-slate-800 mb-6">أداء الفروع</h3>
-              <div className="space-y-3">
-                {branchPerformance.length > 0 ? (
-                  branchPerformance.slice(0, 6).map((branch) => (
-                    <div key={branch.branch_id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
-                      <div className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="font-black text-slate-800 text-sm">{branch.name}</p>
-                          <p className="text-[11px] font-bold text-slate-400">عدد الطلبات المؤكدة: {branch.orders}</p>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+              <SectionCard title="الطلبات الأخيرة" subtitle="آخر حركة وصلت للنظام بحسب الفلتر الحالي." icon={ShoppingCart}>
+                <div className="space-y-3">
+                  {orders.slice(0, 6).map((order) => {
+                    const isConfirmed = order.status === 'confirmed';
+                    return (
+                      <div key={order.id} className="flex flex-col gap-4 rounded-[1.6rem] border border-slate-100 bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div
+                            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[1.2rem] ${
+                              isConfirmed ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                            }`}
+                          >
+                            {isConfirmed ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-900">طلب #{order.order_number}</p>
+                            <p className="mt-1 truncate text-xs font-bold text-slate-500">
+                              {order.salesperson_name || 'موظف غير محدد'}
+                              {order.branch_id ? ` • ${branchNames[order.branch_id] || 'فرع غير معروف'}` : ''}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 sm:block sm:text-left">
+                          <p className="text-base font-black text-slate-900">{formatMoney(order.total_final_price || 0)}</p>
+                          <span className={`text-xs font-black ${isConfirmed ? 'text-emerald-600' : 'text-amber-600'}`}>
+                            {isConfirmed ? 'مدفوع ومؤكد' : 'بانتظار الإقفال'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {orders.length === 0 ? (
+                    <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm font-bold text-slate-400">
+                      لا توجد طلبات في هذه الفترة.
+                    </div>
+                  ) : null}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="تنبيهات تحتاج متابعة" subtitle="أهم ما يحتاج قرارًا سريعًا من الإدارة." icon={AlertCircle}>
+                <div className="space-y-4">
+                  <div className="rounded-[1.6rem] border border-amber-100 bg-amber-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black tracking-[0.16em] text-amber-700">حسابات تنتظر التفعيل</p>
+                        <p className="mt-2 text-2xl font-black text-amber-900">{pendingApprovals}</p>
+                      </div>
+                      <Users className="h-6 w-6 text-amber-500" />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.6rem] border border-rose-100 bg-rose-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black tracking-[0.16em] text-rose-700">منتجات تحت الحد الأدنى</p>
+                        <p className="mt-2 text-2xl font-black text-rose-900">{lowStock.length}</p>
+                      </div>
+                      <Package className="h-6 w-6 text-rose-500" />
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.6rem] border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-black tracking-[0.16em] text-slate-500">أقرب عناصر تحتاج تدخل</p>
+                    <div className="mt-4 space-y-3">
+                      {lowStock.slice(0, 4).map((product) => (
+                        <div key={product.id} className="flex items-center justify-between gap-4 rounded-[1.2rem] bg-white px-3 py-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-800">{product.name}</p>
+                            <p className="mt-1 text-[11px] font-bold text-slate-400">كود {product.code}</p>
+                          </div>
+                          <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-600">
+                            {product.stock_quantity}
+                          </span>
+                        </div>
+                      ))}
+
+                      {lowStock.length === 0 ? (
+                        <p className="rounded-[1.2rem] bg-white px-4 py-4 text-sm font-bold text-slate-500">
+                          لا توجد تنبيهات مخزون حرجة الآن.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <SectionCard title="أفضل المنتجات" subtitle="الأعلى عائدًا في الفترة المختارة." icon={Package}>
+                <div className="space-y-3">
+                  {topProducts.length > 0 ? (
+                    topProducts.map((product, index) => (
+                      <div key={product.product_name} className="flex items-center justify-between rounded-[1.6rem] border border-slate-100 bg-slate-50 px-4 py-4">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.2rem] bg-[#120b07] font-black text-white">
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-900">{product.product_name}</p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">{product.quantity} قطعة مباعة</p>
+                          </div>
                         </div>
                         <div className="text-left">
-                          <p className="font-black text-slate-900">{Math.round(branch.revenue).toLocaleString()} ج.م</p>
-                          <p className="text-[11px] font-bold text-slate-400">إجمالي المبيعات</p>
+                          <p className="text-sm font-black text-slate-900">{formatMoney(product.revenue)}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">إيراد</p>
                         </div>
                       </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm font-bold text-slate-400">
+                      لا توجد بيانات كافية لعرض المنتجات الأقوى.
                     </div>
-                  ))
-                ) : (
-                  <p className="py-8 text-center font-bold text-slate-400">لا توجد بيانات فروع مؤكدة في هذه الفترة.</p>
-                )}
-              </div>
+                  )}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="أداء الفروع" subtitle="ترتيب الفروع حسب الإيراد المؤكد." icon={Building2}>
+                <div className="space-y-3">
+                  {branchPerformance.length > 0 ? (
+                    branchPerformance.slice(0, 6).map((branch, index) => (
+                      <div key={branch.branch_id} className="rounded-[1.6rem] border border-slate-100 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.2rem] bg-blue-50 font-black text-blue-600">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-slate-900">{branch.name}</p>
+                              <p className="mt-1 text-xs font-bold text-slate-500">{branch.orders} طلبات مؤكدة</p>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-black text-slate-900">{formatMoney(branch.revenue)}</p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">إيراد</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm font-bold text-slate-400">
+                      لا توجد بيانات فروع مؤكدة في هذه الفترة.
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 };
