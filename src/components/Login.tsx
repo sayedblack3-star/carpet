@@ -6,7 +6,7 @@ import BrandMark from './BrandMark';
 import { logAction } from '../lib/logger';
 import { normalizeEmail } from '../lib/security';
 
-const LOGIN_TIMEOUT_MS = 15000;
+const LOGIN_TIMEOUT_MS = 7000;
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');

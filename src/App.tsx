@@ -26,9 +26,9 @@ const TABS = [
   { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['admin'] as UserRole[] },
 ];
 
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 12000;
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 6000;
 const AUTH_BOOTSTRAP_TIMEOUT_MESSAGE = 'Timed out while restoring the current session.';
-const PROFILE_LOAD_TIMEOUT_MS = 30000;
+const PROFILE_LOAD_TIMEOUT_MS = 10000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
 const PROFILE_CACHE_KEY = 'carpet-land-profile-cache-v1';
 
