@@ -93,6 +93,24 @@ const isSchemaCompatibilityError = (error: { code?: string | null; message?: str
   );
 };
 
+const isPermissionDeniedError = (error: { code?: string | null; message?: string | null; details?: string | null; hint?: string | null }) => {
+  const combined = [error.code, error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return error.code === '42501' || combined.includes('permission denied');
+};
+
+const isReferenceConstraintError = (error: { code?: string | null; message?: string | null; details?: string | null; hint?: string | null }) => {
+  const combined = [error.code, error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return error.code === '23503' || combined.includes('foreign key') || combined.includes('still referenced');
+};
+
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
   if (error && typeof error === 'object' && 'message' in error && typeof (error as { message?: unknown }).message === 'string') {
@@ -160,14 +178,14 @@ const ensureAdminActor = async (
 const cleanupUserReferences = async (adminClient: ReturnType<typeof createSupabaseServerClient>, userId: string) => {
   const nullify = async (table: string, column: string) => {
     const { error } = await adminClient.from(table).update({ [column]: null }).eq(column, userId);
-    if (error && !isSchemaCompatibilityError(error)) {
+    if (error && !isSchemaCompatibilityError(error) && !isPermissionDeniedError(error)) {
       throw error;
     }
   };
 
   const removeRows = async (table: string, column: string) => {
     const { error } = await adminClient.from(table).delete().eq(column, userId);
-    if (error && !isSchemaCompatibilityError(error)) {
+    if (error && !isSchemaCompatibilityError(error) && !isPermissionDeniedError(error)) {
       throw error;
     }
   };
@@ -322,6 +340,20 @@ const hasSellerOrderHistory = async (
   return { hasHistory: false, error: actorResult.error };
 };
 
+const deleteManagedProfile = async (
+  actorClient: ReturnType<typeof createSupabaseServerClient>,
+  adminClient: ReturnType<typeof createSupabaseServerClient>,
+  userId: string,
+) => {
+  const actorResult = await actorClient.from('profiles').delete().eq('id', userId);
+  if (!actorResult.error) {
+    return { error: null };
+  }
+
+  const adminResult = await adminClient.from('profiles').delete().eq('id', userId);
+  return { error: adminResult.error || actorResult.error };
+};
+
 export default async function handler(request: Request) {
   if (request.method === 'OPTIONS') {
     return empty(request);
@@ -419,9 +451,13 @@ export default async function handler(request: Request) {
       }
 
       try {
-        await cleanupUserReferences(adminClient, targetUserId);
+        let { error: profileDeleteError } = await deleteManagedProfile(actorClient, adminClient, targetUserId);
 
-        const { error: profileDeleteError } = await adminClient.from('profiles').delete().eq('id', targetUserId);
+        if (profileDeleteError && isReferenceConstraintError(profileDeleteError)) {
+          await cleanupUserReferences(adminClient, targetUserId);
+          ({ error: profileDeleteError } = await deleteManagedProfile(actorClient, adminClient, targetUserId));
+        }
+
         if (profileDeleteError) {
           throw profileDeleteError;
         }
