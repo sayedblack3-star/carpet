@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { supabase } from '../supabase';
+import { getSafeSession, supabase } from '../supabase';
 import { Order, Product, Profile } from '../types';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import ProductSearch from './ProductSearch';
@@ -56,9 +56,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 
   useEffect(() => {
     const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = await getSafeSession();
 
       if (session) {
         setSessionUser(session.user);

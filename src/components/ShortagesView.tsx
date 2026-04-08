@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { supabase } from '../supabase';
+import { getSafeSession, supabase } from '../supabase';
 import { Shortage } from '../types';
 import { ClipboardList, Plus, CheckCircle, Clock, Search, Copy, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -50,9 +50,7 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
       return;
     }
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await getSafeSession();
 
     const payload: Record<string, any> = {
       product_name: productName,

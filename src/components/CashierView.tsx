@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { supabase } from '../supabase';
+import { getSafeSession, supabase } from '../supabase';
 import { Order, OrderItem, Product } from '../types';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import { logAction } from '../lib/logger';
@@ -54,9 +54,13 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const fallbackToastShownRef = useRef(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setSessionUser(session.user);
-    });
+    void getSafeSession()
+      .then((session) => {
+        if (session) setSessionUser(session.user);
+      })
+      .catch((error) => {
+        console.warn('Cashier session bootstrap skipped:', error);
+      });
 
     void Promise.all([fetchOrders(), fetchProducts(), fetchSellerMeta()]);
 

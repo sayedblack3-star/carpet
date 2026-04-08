@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { supabase, supabaseConfigError } from './supabase';
+import { getSafeSession, supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
 import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -219,9 +219,7 @@ const App: React.FC = () => {
 
     const bootstrapAuth = async () => {
       try {
-        const {
-          data: { session },
-        } = await withTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS, AUTH_BOOTSTRAP_TIMEOUT_MESSAGE);
+        const session = await withTimeout(getSafeSession(), AUTH_BOOTSTRAP_TIMEOUT_MS, AUTH_BOOTSTRAP_TIMEOUT_MESSAGE);
 
         if (!isMounted || authStateHandledRef.current) return;
 

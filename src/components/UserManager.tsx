@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { supabase } from '../supabase';
+import { getSafeSession, supabase } from '../supabase';
 import { Branch, Profile, UserRole } from '../types';
 import { Users, Edit2, Shield, X, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2, UserPlus, Lock, Eye, EyeOff, Building2, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -49,9 +49,13 @@ const UserManager: React.FC = () => {
   useEffect(() => {
     fetchUsers();
     fetchBranches();
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUserId(session?.user?.id || null);
-    });
+    void getSafeSession()
+      .then((session) => {
+        setCurrentUserId(session?.user?.id || null);
+      })
+      .catch((error) => {
+        console.warn('UserManager session bootstrap skipped:', error);
+      });
   }, []);
 
   const branchLookup = useMemo(() => {
@@ -119,9 +123,7 @@ const UserManager: React.FC = () => {
 
     setCreating(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = await getSafeSession();
 
       if (!session?.access_token) {
         throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
@@ -276,9 +278,7 @@ const UserManager: React.FC = () => {
 
     setDeleting(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = await getSafeSession();
 
       if (!session?.access_token) {
         throw new Error('انتهت الجلسة الحالية. سجل الدخول مرة أخرى ثم أعد المحاولة.');

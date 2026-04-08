@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { getSafeSession, supabase } from '../supabase';
 
 const buildAuditDetails = (details: unknown, branchId?: string) => {
   const normalized: Record<string, unknown> =
@@ -39,7 +39,7 @@ const isSchemaCompatibilityError = (error: {
 
 export const logAction = async (action: string, details: string | any, branchId?: string) => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const session = await getSafeSession();
     const user = session?.user;
     if (!user) return;
 
