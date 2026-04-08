@@ -104,7 +104,7 @@ const createSupabaseServerClient = (url: string, key: string, accessToken?: stri
       : undefined,
   });
 
-const finalizeProfileRecord = async (adminClient: ReturnType<typeof createSupabaseServerClient>, profile: ProfileRecord) => {
+const finalizeProfileRecord = async (profileClient: ReturnType<typeof createSupabaseServerClient>, profile: ProfileRecord) => {
   const updatePayload = {
     email: profile.email,
     full_name: profile.full_name,
@@ -114,7 +114,7 @@ const finalizeProfileRecord = async (adminClient: ReturnType<typeof createSupaba
     is_active: profile.is_active,
   };
 
-  const { data: updatedProfiles, error: updateError } = await adminClient
+  const { data: updatedProfiles, error: updateError } = await profileClient
     .from('profiles')
     .update(updatePayload)
     .eq('id', profile.id)
@@ -129,7 +129,7 @@ const finalizeProfileRecord = async (adminClient: ReturnType<typeof createSupaba
     return { error: null };
   }
 
-  const { error: insertError } = await adminClient.from('profiles').insert(profile);
+  const { error: insertError } = await profileClient.from('profiles').insert(profile);
   return { error: insertError };
 };
 
@@ -264,7 +264,7 @@ export default async function handler(request: Request) {
       is_active: true,
     };
 
-    const { error: profileError } = await finalizeProfileRecord(adminClient, profilePayload);
+    const { error: profileError } = await finalizeProfileRecord(actorClient, profilePayload);
 
     if (profileError) {
       console.error('Profile finalization failed:', profileError.message);
