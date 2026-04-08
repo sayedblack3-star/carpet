@@ -17,9 +17,9 @@ export default function ProductSearch() {
     setLoading(true);
     setSearched(true);
     try {
-      const { data, error } = await supabase.from('products').select('*').eq('code', searchCode.trim()).single();
+      const { data, error } = await supabase.from('products').select('*').eq('code', searchCode.trim()).maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
 
       setProduct(data ? (data as Product) : null);
     } catch {
