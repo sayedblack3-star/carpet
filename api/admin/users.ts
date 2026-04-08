@@ -14,6 +14,16 @@ type CreateUserPayload = {
   branch_id?: string | null;
 };
 
+type ProfileRecord = {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  branch_id: string | null;
+  is_approved: boolean;
+  is_active: boolean;
+};
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{10,}$/;
 const ROLE_SET = new Set<UserRole>(['admin', 'seller', 'cashier']);
@@ -90,6 +100,35 @@ const createSupabaseServerClient = (url: string, key: string, accessToken?: stri
         }
       : undefined,
   });
+
+const finalizeProfileRecord = async (adminClient: ReturnType<typeof createSupabaseServerClient>, profile: ProfileRecord) => {
+  const updatePayload = {
+    email: profile.email,
+    full_name: profile.full_name,
+    role: profile.role,
+    branch_id: profile.branch_id,
+    is_approved: profile.is_approved,
+    is_active: profile.is_active,
+  };
+
+  const { data: updatedProfiles, error: updateError } = await adminClient
+    .from('profiles')
+    .update(updatePayload)
+    .eq('id', profile.id)
+    .select('id')
+    .limit(1);
+
+  if (updateError) {
+    return { error: updateError };
+  }
+
+  if ((updatedProfiles || []).length > 0) {
+    return { error: null };
+  }
+
+  const { error: insertError } = await adminClient.from('profiles').insert(profile);
+  return { error: insertError };
+};
 
 export default async function handler(request: Request) {
   if (request.method === 'OPTIONS') {
@@ -212,7 +251,7 @@ export default async function handler(request: Request) {
     }
 
     const createdUserId = createdUserData.user.id;
-    const profilePayload = {
+    const profilePayload: ProfileRecord = {
       id: createdUserId,
       email,
       full_name: fullName,
@@ -222,11 +261,12 @@ export default async function handler(request: Request) {
       is_active: true,
     };
 
-    const { error: profileError } = await adminClient.from('profiles').upsert(profilePayload, { onConflict: 'id' });
+    const { error: profileError } = await finalizeProfileRecord(adminClient, profilePayload);
 
     if (profileError) {
+      console.error('Profile finalization failed:', profileError.message);
       await adminClient.auth.admin.deleteUser(createdUserId);
-      return json(request, { error: 'Failed to finalize the user profile.' }, 500);
+      return json(request, { error: getErrorMessage(profileError, 'Failed to finalize the user profile.') }, 500);
     }
 
     return json(
