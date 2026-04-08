@@ -209,11 +209,55 @@ const finalizeProfileRecord = async (profileClient: ReturnType<typeof createSupa
   return { error: insertError };
 };
 
+const readActorRest = async <T>(url: string, anonKey: string, accessToken: string) => {
+  const response = await fetch(url, {
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const text = await response.text();
+  let payload: T | { message?: string } | null = null;
+
+  if (text) {
+    try {
+      payload = JSON.parse(text) as T;
+    } catch {
+      payload = { message: text };
+    }
+  }
+
+  if (response.ok) {
+    return { data: payload, error: null };
+  }
+
+  const message =
+    payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message?: unknown }).message === 'string'
+      ? (payload as { message: string }).message
+      : `Supabase REST request failed with status ${response.status}.`;
+
+  return { data: null, error: new Error(message) };
+};
+
 const loadManagedUserProfile = async (
+  url: string,
+  anonKey: string,
+  accessToken: string,
   actorClient: ReturnType<typeof createSupabaseServerClient>,
   adminClient: ReturnType<typeof createSupabaseServerClient>,
   userId: string,
 ) => {
+  const actorRestResult = await readActorRest<Array<Pick<ProfileRecord, 'id' | 'email' | 'role'>>>(
+    `${url}/rest/v1/profiles?select=id,email,role&id=eq.${encodeURIComponent(userId)}&limit=1`,
+    anonKey,
+    accessToken,
+  );
+
+  if (!actorRestResult.error) {
+    return { data: actorRestResult.data?.[0] || null, error: null };
+  }
+
   const actorResult = await actorClient
     .from('profiles')
     .select('id, email, role')
@@ -238,10 +282,23 @@ const loadManagedUserProfile = async (
 };
 
 const hasSellerOrderHistory = async (
+  url: string,
+  anonKey: string,
+  accessToken: string,
   actorClient: ReturnType<typeof createSupabaseServerClient>,
   adminClient: ReturnType<typeof createSupabaseServerClient>,
   userId: string,
 ) => {
+  const actorRestResult = await readActorRest<Array<{ id: string }>>(
+    `${url}/rest/v1/orders?select=id&salesperson_id=eq.${encodeURIComponent(userId)}&limit=1`,
+    anonKey,
+    accessToken,
+  );
+
+  if (!actorRestResult.error) {
+    return { hasHistory: (actorRestResult.data || []).length > 0, error: null };
+  }
+
   const actorResult = await actorClient
     .from('orders')
     .select('id')
@@ -308,6 +365,9 @@ export default async function handler(request: Request) {
       }
 
       const { data: targetProfile, error: targetProfileError } = await loadManagedUserProfile(
+        url,
+        anonKey,
+        accessToken,
         actorClient,
         adminClient,
         targetUserId,
@@ -341,6 +401,9 @@ export default async function handler(request: Request) {
       }
 
       const { hasHistory: salespersonOrderHistory, error: salespersonOrdersError } = await hasSellerOrderHistory(
+        url,
+        anonKey,
+        accessToken,
         actorClient,
         adminClient,
         targetUserId,
