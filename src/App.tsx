@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
-import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2 } from 'lucide-react';
+import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 import UserManager from './components/UserManager';
@@ -129,8 +129,10 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const authStateHandledRef = useRef(false);
   const profileRef = useRef<Profile | null>(null);
+  const networkStateRef = useRef(isOnline);
 
   const role = profile?.role || 'seller';
   const allowedTabs = useMemo(() => TABS.filter((tab) => tab.roles.includes(role as UserRole)), [role]);
@@ -151,6 +153,34 @@ const App: React.FC = () => {
     profileRef.current = profile;
     if (profile) writeCachedProfile(profile);
   }, [profile]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (!networkStateRef.current) {
+        toast.success('عاد الاتصال بالإنترنت. يتم تحديث البيانات الآن.');
+      }
+      networkStateRef.current = true;
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      if (networkStateRef.current) {
+        toast.warning('أنت الآن دون اتصال. بعض العمليات ستتأخر حتى يعود الإنترنت.');
+      }
+      networkStateRef.current = false;
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -485,6 +515,13 @@ const App: React.FC = () => {
           </div>
           <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center font-black text-xs">{profile.full_name?.[0]}</div>
         </header>
+
+        {!isOnline && (
+          <div className="mx-3 mt-3 sm:mx-6 sm:mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900 flex items-center gap-2 shadow-sm">
+            <WifiOff className="w-4 h-4 shrink-0" />
+            <span>الاتصال بالإنترنت غير متاح الآن. يمكنك التصفح، لكن العمليات الجديدة قد لا تُحفظ حتى يعود الاتصال.</span>
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto bg-[#fafbfc] safe-area-bottom">{renderContent()}</div>
 

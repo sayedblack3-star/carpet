@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../supabase';
-import { Order, Product, Profile } from '../types';
+import { Branch, Order, OrderItem, Product, Profile, Shift } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp, Users, DollarSign, Package, ShoppingCart, AlertCircle, Clock, CheckCircle } from 'lucide-react';
 import { subDays, startOfDay, format } from 'date-fns';
@@ -53,6 +53,9 @@ const DashboardView: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState<'today' | 'week' | 'month' | 'all'>('month');
@@ -72,13 +75,16 @@ const DashboardView: React.FC = () => {
       ordersQuery = ordersQuery.gte('created_at', subDays(now, 30).toISOString());
     }
 
-    const [ordersResult, productsResult, usersResult] = await Promise.allSettled([
+    const [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult] = await Promise.allSettled([
       queryWithRetry(() => Promise.resolve(ordersQuery.order('created_at', { ascending: false }))),
       queryWithRetry(() => Promise.resolve(supabase.from('products').select('*').eq('is_deleted', false))),
       queryWithRetry(() => Promise.resolve(supabase.from('profiles').select('*'))),
+      queryWithRetry(() => Promise.resolve(supabase.from('order_items').select('*'))),
+      queryWithRetry(() => Promise.resolve(supabase.from('shifts').select('*').order('start_time', { ascending: false }).limit(50))),
+      queryWithRetry(() => Promise.resolve(supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name'))),
     ]);
 
-    const failedResults = [ordersResult, productsResult, usersResult].filter((result) => result.status === 'rejected');
+    const failedResults = [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult].filter((result) => result.status === 'rejected');
     if (failedResults.length > 0) {
       setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. تم الاحتفاظ بالعرض وسيتم إعادة المحاولة تلقائيًا.');
     }
@@ -101,6 +107,24 @@ const DashboardView: React.FC = () => {
       setUsers([]);
     }
 
+    if (orderItemsResult.status === 'fulfilled' && !orderItemsResult.value.error) {
+      setOrderItems((orderItemsResult.value.data || []) as OrderItem[]);
+    } else if (orderItems.length === 0) {
+      setOrderItems([]);
+    }
+
+    if (shiftsResult.status === 'fulfilled' && !shiftsResult.value.error) {
+      setShifts((shiftsResult.value.data || []) as Shift[]);
+    } else if (shifts.length === 0) {
+      setShifts([]);
+    }
+
+    if (branchesResult.status === 'fulfilled' && !branchesResult.value.error) {
+      setBranches((branchesResult.value.data || []) as Branch[]);
+    } else if (branches.length === 0) {
+      setBranches([]);
+    }
+
     setLoading(false);
   };
 
@@ -121,6 +145,45 @@ const DashboardView: React.FC = () => {
   const lowStock = products.filter((product) => product.stock_quantity <= product.min_stock_level && product.is_active);
   const sellers = users.filter((user) => user.role === 'seller');
   const cashiers = users.filter((user) => user.role === 'cashier');
+  const activeShifts = shifts.filter((shift) => shift.status === 'active');
+  const closedToday = shifts.filter((shift) => shift.status === 'closed' && shift.end_time && new Date(shift.end_time) >= startOfDay(new Date()));
+  const confirmedOrderIds = new Set(confirmed.map((order) => order.id));
+  const topProducts = Object.values(
+    orderItems
+      .filter((item) => confirmedOrderIds.has(item.order_id))
+      .reduce<Record<string, { product_name: string; quantity: number; revenue: number }>>((acc, item) => {
+        const key = item.product_id || item.product_name;
+        if (!acc[key]) {
+          acc[key] = { product_name: item.product_name, quantity: 0, revenue: 0 };
+        }
+        acc[key].quantity += item.quantity || 0;
+        acc[key].revenue += item.total_price || 0;
+        return acc;
+      }, {}),
+  )
+    .sort((left, right) => right.revenue - left.revenue)
+    .slice(0, 5);
+  const branchNames = branches.reduce<Record<string, string>>((acc, branch) => {
+    acc[branch.id] = branch.name;
+    return acc;
+  }, {});
+  const branchPerformance = Object.values(
+    confirmed.reduce<Record<string, { branch_id: string; name: string; orders: number; revenue: number }>>((acc, order) => {
+      const key = order.branch_id || 'unassigned';
+      if (!acc[key]) {
+        acc[key] = {
+          branch_id: key,
+          name: order.branch_id ? branchNames[order.branch_id] || 'فرع غير معروف' : 'بدون فرع',
+          orders: 0,
+          revenue: 0,
+        };
+      }
+
+      acc[key].orders += 1;
+      acc[key].revenue += order.total_final_price || 0;
+      return acc;
+    }, {}),
+  ).sort((left, right) => right.revenue - left.revenue);
 
   const last7Days = Array.from({ length: 7 }, (_, index) => {
     const day = subDays(new Date(), 6 - index);
@@ -199,6 +262,12 @@ const DashboardView: React.FC = () => {
             <StatCard icon={DollarSign} label="متوسط الفاتورة" value={Math.round(avgOrder).toLocaleString()} sub="ج.م" color="bg-teal-50 text-teal-600" />
           </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <StatCard icon={Clock} label="الورديات المفتوحة" value={activeShifts.length} sub="وردية" color="bg-orange-50 text-orange-600" />
+            <StatCard icon={CheckCircle} label="ورديات مغلقة اليوم" value={closedToday.length} sub="وردية" color="bg-emerald-50 text-emerald-600" />
+            <StatCard icon={Package} label="الفروع النشطة" value={branches.length} sub="فرع" color="bg-cyan-50 text-cyan-600" />
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
             <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border min-w-0">
               <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-2">
@@ -266,6 +335,59 @@ const DashboardView: React.FC = () => {
               </div>
             </div>
           )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border">
+              <h3 className="text-xl font-black text-slate-800 mb-6">أفضل المنتجات في الفترة</h3>
+              <div className="space-y-3">
+                {topProducts.length > 0 ? (
+                  topProducts.map((product, index) => (
+                    <div key={product.product_name} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 font-black">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="font-black text-slate-800 text-sm">{product.product_name}</p>
+                          <p className="text-[11px] font-bold text-slate-400">عدد القطع: {product.quantity}</p>
+                        </div>
+                      </div>
+                      <div className="text-left">
+                        <p className="font-black text-slate-900">{Math.round(product.revenue).toLocaleString()} ج.م</p>
+                        <p className="text-[11px] font-bold text-slate-400">إيراد</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-8 text-center font-bold text-slate-400">لا توجد بيانات كافية لعرض أفضل المنتجات في هذه الفترة.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border">
+              <h3 className="text-xl font-black text-slate-800 mb-6">أداء الفروع</h3>
+              <div className="space-y-3">
+                {branchPerformance.length > 0 ? (
+                  branchPerformance.slice(0, 6).map((branch) => (
+                    <div key={branch.branch_id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="font-black text-slate-800 text-sm">{branch.name}</p>
+                          <p className="text-[11px] font-bold text-slate-400">عدد الطلبات المؤكدة: {branch.orders}</p>
+                        </div>
+                        <div className="text-left">
+                          <p className="font-black text-slate-900">{Math.round(branch.revenue).toLocaleString()} ج.م</p>
+                          <p className="text-[11px] font-bold text-slate-400">إجمالي المبيعات</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="py-8 text-center font-bold text-slate-400">لا توجد بيانات فروع مؤكدة في هذه الفترة.</p>
+                )}
+              </div>
+            </div>
+          </div>
         </>
       )}
     </div>

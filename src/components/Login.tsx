@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { toast } from 'sonner';
-import { LogIn, Mail, Lock, Sparkles } from 'lucide-react';
+import { LogIn, Mail, Lock, Sparkles, Eye, EyeOff, ShieldCheck, Wifi } from 'lucide-react';
 import BrandMark from './BrandMark';
 import { logAction } from '../lib/logger';
 import { normalizeEmail } from '../lib/security';
@@ -12,6 +12,7 @@ const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +53,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#120b07] p-6" dir="rtl">
+    <div className="min-safe-screen safe-area-x safe-area-top safe-area-bottom flex items-center justify-center relative overflow-hidden bg-[#120b07] px-4 py-5 sm:p-6" dir="rtl">
       <div
         className="absolute inset-0 opacity-60"
         style={{
@@ -81,19 +82,36 @@ const Login: React.FC = () => {
       </svg>
 
       <div className="relative z-10 w-full max-w-[480px]">
-        <div className="relative overflow-hidden rounded-[3.5rem] border border-white/10 bg-white/[0.05] p-12 shadow-[0_35px_120px_-20px_rgba(0,0,0,0.8)] backdrop-blur-3xl">
+        <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[3.5rem] border border-white/10 bg-white/[0.05] p-6 sm:p-12 shadow-[0_35px_120px_-20px_rgba(0,0,0,0.8)] backdrop-blur-3xl">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="absolute inset-x-12 top-32 h-px bg-gradient-to-r from-transparent via-amber-300/30 to-transparent" />
 
-          <div className="text-center mb-10">
-            <div className="flex justify-center mb-6">
+          <div className="text-center mb-8 sm:mb-10">
+            <div className="flex justify-center mb-5 sm:mb-6">
               <BrandMark iconOnly />
             </div>
-            <h1 className="text-4xl font-black text-white mb-2">كاربت لاند</h1>
-            <p className="text-amber-100/80 font-bold text-sm tracking-[0.24em] mb-3">CARPETS AND HOME TEXTILES</p>
+            <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">كاربت لاند</h1>
+            <p className="text-amber-100/80 font-bold text-[11px] sm:text-sm tracking-[0.18em] sm:tracking-[0.24em] mb-4">CARPETS AND HOME TEXTILES</p>
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-black text-amber-100">
               <Sparkles className="w-4 h-4 text-amber-300" />
               الاستاذ احمد السويفي
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3 text-right">
+              <div className="flex items-center justify-between mb-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-300" />
+                <span className="text-[10px] font-black text-white/60">دخول آمن</span>
+              </div>
+              <p className="text-sm font-black text-white">بنفس حساب الويب</p>
+            </div>
+            <div className="rounded-2xl border border-white/8 bg-black/20 px-4 py-3 text-right">
+              <div className="flex items-center justify-between mb-2">
+                <Wifi className="w-4 h-4 text-amber-300" />
+                <span className="text-[10px] font-black text-white/60">استجابة أسرع</span>
+              </div>
+              <p className="text-sm font-black text-white">رسالة واضحة لو النت ضعيف</p>
             </div>
           </div>
 
@@ -107,7 +125,9 @@ const Login: React.FC = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="block w-full bg-black/40 border-2 border-white/5 rounded-2xl py-4 pr-12 pl-5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all font-semibold"
+                autoComplete="email"
+                inputMode="email"
+                className="block w-full bg-black/40 border-2 border-white/5 rounded-2xl py-4 pr-12 pl-5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all font-semibold text-base"
                 placeholder="البريد الإلكتروني"
               />
             </div>
@@ -116,18 +136,27 @@ const Login: React.FC = () => {
                 <Lock className="h-5 w-5 text-slate-500" />
               </div>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="block w-full bg-black/40 border-2 border-white/5 rounded-2xl py-4 pr-12 pl-5 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all font-semibold"
+                autoComplete="current-password"
+                className="block w-full bg-black/40 border-2 border-white/5 rounded-2xl py-4 pr-12 pl-12 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500/50 transition-all font-semibold text-base"
                 placeholder="كلمة المرور"
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-400 hover:text-white transition"
+                aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-bold text-lg py-4 rounded-2xl transition-all shadow-xl shadow-amber-600/20 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-3"
+              className="w-full min-h-14 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-white font-bold text-lg py-4 rounded-2xl transition-all shadow-xl shadow-amber-600/20 active:scale-95 disabled:opacity-60 flex items-center justify-center gap-3"
             >
               {loading ? (
                 <div className="w-6 h-6 border-[3px] border-white/30 border-t-white rounded-full animate-spin" />
@@ -137,6 +166,7 @@ const Login: React.FC = () => {
                 </>
               )}
             </button>
+            <p className="text-center text-[11px] leading-6 text-slate-400 font-bold">استخدم البريد الوظيفي نفسه على الويب والموبايل لتظهر لك نفس الصلاحيات والبيانات.</p>
           </form>
 
           <div className="mt-8 border-t border-white/5 pt-6 text-center">

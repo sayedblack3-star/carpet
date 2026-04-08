@@ -84,3 +84,15 @@ export interface Shortage {
   is_resolved: boolean;
   created_at: string;
 }
+
+export interface Shift {
+  id: string;
+  user_id: string;
+  branch_id?: string | null;
+  status: 'active' | 'closed';
+  start_time: string;
+  end_time?: string | null;
+  starting_cash?: number | null;
+  ending_cash?: number | null;
+  created_at?: string;
+}

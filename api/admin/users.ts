@@ -14,6 +14,10 @@ type CreateUserPayload = {
   branch_id?: string | null;
 };
 
+type DeleteUserPayload = {
+  user_id?: string;
+};
+
 type ProfileRecord = {
   id: string;
   email: string;
@@ -44,7 +48,7 @@ const getCorsHeaders = (request: Request) => {
 
   return {
     'access-control-allow-origin': allowOrigin,
-    'access-control-allow-methods': 'POST, OPTIONS',
+    'access-control-allow-methods': 'POST, DELETE, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
     'access-control-max-age': '86400',
     vary: 'Origin',
@@ -72,6 +76,22 @@ const empty = (request: Request, status = 204) =>
   });
 
 const isMissingRelationError = (message: string) => /relation .* does not exist/i.test(message);
+
+const isSchemaCompatibilityError = (error: { code?: string | null; message?: string | null; details?: string | null; hint?: string | null }) => {
+  const combined = [error.code, error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return (
+    isMissingRelationError(error.message || '') ||
+    error.code === 'PGRST204' ||
+    error.code === '42703' ||
+    combined.includes('schema cache') ||
+    combined.includes('could not find') ||
+    combined.includes('column')
+  );
+};
 
 const getErrorMessage = (error: unknown, fallback: string) => {
   if (error instanceof Error && error.message) return error.message;
@@ -104,6 +124,61 @@ const createSupabaseServerClient = (url: string, key: string, accessToken?: stri
         }
       : undefined,
   });
+
+const ensureAdminActor = async (
+  adminClient: ReturnType<typeof createSupabaseServerClient>,
+  actorClient: ReturnType<typeof createSupabaseServerClient>,
+  accessToken: string,
+) => {
+  const {
+    data: { user: actor },
+    error: actorError,
+  } = await adminClient.auth.getUser(accessToken);
+
+  if (actorError || !actor) {
+    return { actor: null, actorProfile: null, response: { error: 'Invalid session token.', status: 401 } };
+  }
+
+  const { data: actorProfile, error: actorProfileError } = await actorClient
+    .from('profiles')
+    .select('role, is_active, is_approved')
+    .eq('id', actor.id)
+    .maybeSingle();
+
+  if (actorProfileError) {
+    console.error('Admin profile verification failed:', actorProfileError.message);
+    return { actor: null, actorProfile: null, response: { error: 'Unable to verify the current admin profile.', status: 500 } };
+  }
+
+  if (!actorProfile || actorProfile.role !== 'admin' || !actorProfile.is_active || !actorProfile.is_approved) {
+    return { actor: null, actorProfile: null, response: { error: 'Only active approved admins can manage users.', status: 403 } };
+  }
+
+  return { actor, actorProfile, response: null };
+};
+
+const cleanupUserReferences = async (adminClient: ReturnType<typeof createSupabaseServerClient>, userId: string) => {
+  const nullify = async (table: string, column: string) => {
+    const { error } = await adminClient.from(table).update({ [column]: null }).eq(column, userId);
+    if (error && !isSchemaCompatibilityError(error)) {
+      throw error;
+    }
+  };
+
+  const removeRows = async (table: string, column: string) => {
+    const { error } = await adminClient.from(table).delete().eq(column, userId);
+    if (error && !isSchemaCompatibilityError(error)) {
+      throw error;
+    }
+  };
+
+  await nullify('audit_logs', 'user_id');
+  await nullify('shortages', 'reported_by_id');
+  await nullify('orders', 'cashier_id');
+  await removeRows('notifications', 'sender_id');
+  await removeRows('notifications', 'receiver_id');
+  await removeRows('shifts', 'user_id');
+};
 
 const finalizeProfileRecord = async (profileClient: ReturnType<typeof createSupabaseServerClient>, profile: ProfileRecord) => {
   const updatePayload = {
@@ -139,7 +214,7 @@ export default async function handler(request: Request) {
     return empty(request);
   }
 
-  if (request.method !== 'POST') {
+  if (request.method !== 'POST' && request.method !== 'DELETE') {
     return json(request, { error: 'Method not allowed.' }, 405);
   }
 
@@ -151,18 +226,100 @@ export default async function handler(request: Request) {
       return json(request, { error: 'Missing authorization token.' }, 401);
     }
 
-    let payload: CreateUserPayload;
+    let payload: CreateUserPayload | DeleteUserPayload;
     try {
-      payload = (await request.json()) as CreateUserPayload;
+      payload = (await request.json()) as CreateUserPayload | DeleteUserPayload;
     } catch {
       return json(request, { error: 'Invalid JSON body.' }, 400);
     }
 
-    const email = normalizeEmail(payload.email || '');
-    const password = payload.password || '';
-    const fullName = normalizeText(payload.full_name || '');
-    const role = payload.role;
-    const branchId = typeof payload.branch_id === 'string' ? normalizeText(payload.branch_id) : null;
+    const { url, anonKey, serviceRoleKey } = getSupabaseServerConfig();
+    const adminClient = createSupabaseServerClient(url, serviceRoleKey);
+    const actorClient = createSupabaseServerClient(url, anonKey, accessToken);
+    const { actor, response } = await ensureAdminActor(adminClient, actorClient, accessToken);
+    if (response) {
+      return json(request, { error: response.error }, response.status);
+    }
+
+    if (request.method === 'DELETE') {
+      const targetUserId = normalizeText((payload as DeleteUserPayload).user_id || '');
+      if (!targetUserId) {
+        return json(request, { error: 'User id is required.' }, 400);
+      }
+
+      if (targetUserId === actor?.id) {
+        return json(request, { error: 'You cannot delete the currently signed-in admin.' }, 400);
+      }
+
+      const { data: targetProfile, error: targetProfileError } = await adminClient
+        .from('profiles')
+        .select('id, email, role')
+        .eq('id', targetUserId)
+        .maybeSingle();
+
+      if (targetProfileError) {
+        return json(request, { error: 'Unable to load the selected user profile.' }, 500);
+      }
+
+      if (!targetProfile) {
+        return json(request, { error: 'The selected user could not be found.' }, 404);
+      }
+
+      if (targetProfile.role === 'admin') {
+        const { count: remainingAdminCount, error: adminCountError } = await adminClient
+          .from('profiles')
+          .select('id', { head: true, count: 'exact' })
+          .eq('role', 'admin')
+          .eq('is_active', true)
+          .eq('is_approved', true)
+          .neq('id', targetUserId);
+
+        if (adminCountError) {
+          return json(request, { error: 'Unable to validate the remaining admin accounts.' }, 500);
+        }
+
+        if ((remainingAdminCount || 0) < 1) {
+          return json(request, { error: 'At least one active approved admin account must remain.' }, 409);
+        }
+      }
+
+      const { count: salespersonOrdersCount, error: salespersonOrdersError } = await adminClient
+        .from('orders')
+        .select('id', { head: true, count: 'exact' })
+        .eq('salesperson_id', targetUserId);
+
+      if (salespersonOrdersError) {
+        return json(request, { error: 'Unable to verify seller order history for this user.' }, 500);
+      }
+
+      if ((salespersonOrdersCount || 0) > 0) {
+        return json(request, { error: 'This user has sales history. Deactivate the account instead of deleting it.' }, 409);
+      }
+
+      try {
+        await cleanupUserReferences(adminClient, targetUserId);
+
+        const { error: profileDeleteError } = await adminClient.from('profiles').delete().eq('id', targetUserId);
+        if (profileDeleteError) {
+          throw profileDeleteError;
+        }
+
+        const { error: deleteAuthUserError } = await adminClient.auth.admin.deleteUser(targetUserId);
+        if (deleteAuthUserError) {
+          throw deleteAuthUserError;
+        }
+
+        return json(request, { success: true, user_id: targetUserId }, 200);
+      } catch (error) {
+        return json(request, { error: getErrorMessage(error, 'Failed to delete the selected user.') }, 500);
+      }
+    }
+
+    const email = normalizeEmail((payload as CreateUserPayload).email || '');
+    const password = (payload as CreateUserPayload).password || '';
+    const fullName = normalizeText((payload as CreateUserPayload).full_name || '');
+    const role = (payload as CreateUserPayload).role;
+    const branchId = typeof (payload as CreateUserPayload).branch_id === 'string' ? normalizeText((payload as CreateUserPayload).branch_id as string) : null;
 
     if (!email || !password || !fullName || !role) {
       return json(request, { error: 'Email, password, full name, and role are required.' }, 400);
@@ -178,34 +335,6 @@ export default async function handler(request: Request) {
 
     if (!ROLE_SET.has(role)) {
       return json(request, { error: 'Unsupported role.' }, 400);
-    }
-
-    const { url, anonKey, serviceRoleKey } = getSupabaseServerConfig();
-    const adminClient = createSupabaseServerClient(url, serviceRoleKey);
-    const actorClient = createSupabaseServerClient(url, anonKey, accessToken);
-
-    const {
-      data: { user: actor },
-      error: actorError,
-    } = await adminClient.auth.getUser(accessToken);
-
-    if (actorError || !actor) {
-      return json(request, { error: 'Invalid session token.' }, 401);
-    }
-
-    const { data: actorProfile, error: actorProfileError } = await actorClient
-      .from('profiles')
-      .select('role, is_active, is_approved')
-      .eq('id', actor.id)
-      .maybeSingle();
-
-    if (actorProfileError) {
-      console.error('Admin profile verification failed:', actorProfileError.message);
-      return json(request, { error: 'Unable to verify the current admin profile.' }, 500);
-    }
-
-    if (!actorProfile || actorProfile.role !== 'admin' || !actorProfile.is_active || !actorProfile.is_approved) {
-      return json(request, { error: 'Only active approved admins can create users.' }, 403);
     }
 
     const { error: branchFeatureError } = await actorClient.from('branches').select('id').limit(1);
