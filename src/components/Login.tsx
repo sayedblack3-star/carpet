@@ -6,6 +6,8 @@ import BrandMark from './BrandMark';
 import { logAction } from '../lib/logger';
 import { normalizeEmail } from '../lib/security';
 
+const LOGIN_TIMEOUT_MS = 15000;
+
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,21 +18,37 @@ const Login: React.FC = () => {
     setLoading(true);
 
     const normalizedEmail = normalizeEmail(email);
-    const { error } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password });
 
-    if (error) {
-      console.warn('Login failed:', error.message);
-      if (error.message.includes('Invalid login')) {
-        toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
-      } else {
-        toast.error(error.message);
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.signInWithPassword({ email: normalizedEmail, password }),
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => reject(new Error('انتهت مهلة تسجيل الدخول. تحقق من اتصال الإنترنت وحاول مرة أخرى.')), LOGIN_TIMEOUT_MS);
+        }),
+      ]);
+
+      if (error) {
+        console.warn('Login failed:', error.message);
+        if (error.message.includes('Invalid login')) {
+          toast.error('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+        } else {
+          toast.error(error.message);
+        }
+        return;
       }
-    } else {
-      await logAction('login_success', { email: normalizedEmail });
-      toast.success('أهلًا بك في كاربت لاند');
-    }
 
-    setLoading(false);
+      void logAction('login_success', { email: normalizedEmail }).catch((logError) => {
+        console.warn('Login audit skipped:', logError);
+      });
+
+      toast.success('أهلًا بك في كاربت لاند');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'تعذر إكمال تسجيل الدخول الآن.';
+      console.warn('Login request failed:', message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
