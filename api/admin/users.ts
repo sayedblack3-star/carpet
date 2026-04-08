@@ -237,6 +237,34 @@ const loadManagedUserProfile = async (
   return actorResult;
 };
 
+const hasSellerOrderHistory = async (
+  actorClient: ReturnType<typeof createSupabaseServerClient>,
+  adminClient: ReturnType<typeof createSupabaseServerClient>,
+  userId: string,
+) => {
+  const actorResult = await actorClient
+    .from('orders')
+    .select('id')
+    .eq('salesperson_id', userId)
+    .limit(1);
+
+  if (!actorResult.error) {
+    return { hasHistory: (actorResult.data || []).length > 0, error: null };
+  }
+
+  const adminResult = await adminClient
+    .from('orders')
+    .select('id')
+    .eq('salesperson_id', userId)
+    .limit(1);
+
+  if (!adminResult.error) {
+    return { hasHistory: (adminResult.data || []).length > 0, error: null };
+  }
+
+  return { hasHistory: false, error: actorResult.error };
+};
+
 export default async function handler(request: Request) {
   if (request.method === 'OPTIONS') {
     return empty(request);
@@ -312,16 +340,18 @@ export default async function handler(request: Request) {
         }
       }
 
-      const { count: salespersonOrdersCount, error: salespersonOrdersError } = await adminClient
-        .from('orders')
-        .select('id', { head: true, count: 'exact' })
-        .eq('salesperson_id', targetUserId);
+      const { hasHistory: salespersonOrderHistory, error: salespersonOrdersError } = await hasSellerOrderHistory(
+        actorClient,
+        adminClient,
+        targetUserId,
+      );
 
       if (salespersonOrdersError) {
+        console.error('Seller history lookup failed:', salespersonOrdersError.message);
         return json(request, { error: 'Unable to verify seller order history for this user.' }, 500);
       }
 
-      if ((salespersonOrdersCount || 0) > 0) {
+      if (salespersonOrderHistory) {
         return json(request, { error: 'This user has sales history. Deactivate the account instead of deleting it.' }, 409);
       }
 
