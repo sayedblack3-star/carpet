@@ -341,10 +341,26 @@ const hasSellerOrderHistory = async (
 };
 
 const deleteManagedProfile = async (
+  url: string,
+  anonKey: string,
+  accessToken: string,
   actorClient: ReturnType<typeof createSupabaseServerClient>,
   adminClient: ReturnType<typeof createSupabaseServerClient>,
   userId: string,
 ) => {
+  const actorRestDelete = await fetch(`${url}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      Prefer: 'return=minimal',
+    },
+  });
+
+  if (actorRestDelete.ok) {
+    return { error: null };
+  }
+
   const actorResult = await actorClient.from('profiles').delete().eq('id', userId);
   if (!actorResult.error) {
     return { error: null };
@@ -451,11 +467,25 @@ export default async function handler(request: Request) {
       }
 
       try {
-        let { error: profileDeleteError } = await deleteManagedProfile(actorClient, adminClient, targetUserId);
+        let { error: profileDeleteError } = await deleteManagedProfile(
+          url,
+          anonKey,
+          accessToken,
+          actorClient,
+          adminClient,
+          targetUserId,
+        );
 
         if (profileDeleteError && isReferenceConstraintError(profileDeleteError)) {
           await cleanupUserReferences(adminClient, targetUserId);
-          ({ error: profileDeleteError } = await deleteManagedProfile(actorClient, adminClient, targetUserId));
+          ({ error: profileDeleteError } = await deleteManagedProfile(
+            url,
+            anonKey,
+            accessToken,
+            actorClient,
+            adminClient,
+            targetUserId,
+          ));
         }
 
         if (profileDeleteError) {
