@@ -340,6 +340,53 @@ const hasSellerOrderHistory = async (
   return { hasHistory: false, error: actorResult.error };
 };
 
+const hasAnotherActiveApprovedAdmin = async (
+  url: string,
+  anonKey: string,
+  accessToken: string,
+  actorClient: ReturnType<typeof createSupabaseServerClient>,
+  adminClient: ReturnType<typeof createSupabaseServerClient>,
+  excludedUserId: string,
+) => {
+  const actorRestResult = await readActorRest<Array<{ id: string }>>(
+    `${url}/rest/v1/profiles?select=id&role=eq.admin&is_active=eq.true&is_approved=eq.true&id=neq.${encodeURIComponent(excludedUserId)}&limit=1`,
+    anonKey,
+    accessToken,
+  );
+
+  if (!actorRestResult.error) {
+    return { hasAnotherAdmin: (actorRestResult.data || []).length > 0, error: null };
+  }
+
+  const actorResult = await actorClient
+    .from('profiles')
+    .select('id')
+    .eq('role', 'admin')
+    .eq('is_active', true)
+    .eq('is_approved', true)
+    .neq('id', excludedUserId)
+    .limit(1);
+
+  if (!actorResult.error) {
+    return { hasAnotherAdmin: (actorResult.data || []).length > 0, error: null };
+  }
+
+  const adminResult = await adminClient
+    .from('profiles')
+    .select('id')
+    .eq('role', 'admin')
+    .eq('is_active', true)
+    .eq('is_approved', true)
+    .neq('id', excludedUserId)
+    .limit(1);
+
+  if (!adminResult.error) {
+    return { hasAnotherAdmin: (adminResult.data || []).length > 0, error: null };
+  }
+
+  return { hasAnotherAdmin: false, error: actorResult.error };
+};
+
 const deleteManagedProfile = async (
   url: string,
   anonKey: string,
@@ -431,19 +478,21 @@ export default async function handler(request: Request) {
       }
 
       if (targetProfile.role === 'admin') {
-        const { count: remainingAdminCount, error: adminCountError } = await adminClient
-          .from('profiles')
-          .select('id', { head: true, count: 'exact' })
-          .eq('role', 'admin')
-          .eq('is_active', true)
-          .eq('is_approved', true)
-          .neq('id', targetUserId);
+        const { hasAnotherAdmin, error: adminCountError } = await hasAnotherActiveApprovedAdmin(
+          url,
+          anonKey,
+          accessToken,
+          actorClient,
+          adminClient,
+          targetUserId,
+        );
 
         if (adminCountError) {
+          console.error('Remaining admin validation failed:', adminCountError.message);
           return json(request, { error: 'Unable to validate the remaining admin accounts.' }, 500);
         }
 
-        if ((remainingAdminCount || 0) < 1) {
+        if (!hasAnotherAdmin) {
           return json(request, { error: 'At least one active approved admin account must remain.' }, 409);
         }
       }
