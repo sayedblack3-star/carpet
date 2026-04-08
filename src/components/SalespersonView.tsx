@@ -310,9 +310,10 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const cartCount = cart.reduce((sum, item) => sum + item.cartQuantity, 0);
 
   return (
-    <div className="flex h-full flex-col bg-slate-50" dir="rtl">
-      <div className="sticky top-0 z-40 flex flex-col gap-4 border-b border-slate-100 bg-white p-4 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
-        <div className="relative w-full xl:w-96">
+    <div className="flex h-full flex-col bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.07),transparent_20%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]" dir="rtl">
+      <div className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-[1900px] flex-col gap-4 p-4 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
+        <div className="relative w-full xl:w-[26rem]">
           <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -342,6 +343,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           >
             <span className="flex items-center gap-2"><ScanSearch className="h-5 w-5" /> البحث بالكود</span>
           </button>
+        </div>
         </div>
       </div>
 
@@ -393,7 +395,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           </div>
         </div>
       ) : view === 'pos' ? (
-        <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        <div className="mx-auto flex w-full max-w-[1900px] flex-1 flex-col overflow-hidden lg:flex-row lg:gap-6 lg:overflow-visible lg:px-4 lg:py-5">
           <div className="px-4 pt-4 lg:hidden">
             <div className="rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
@@ -418,14 +420,14 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             </div>
           </div>
 
-          <div className="order-2 flex-1 overflow-y-auto p-4 sm:p-6 lg:order-1">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="order-2 flex-1 overflow-y-auto p-4 sm:p-6 lg:order-1 lg:pr-0">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
               {filteredProducts.map((product) => (
                 <button
                   key={product.id}
                   type="button"
                   onClick={() => addToCart(product)}
-                  className="group flex min-h-[12.5rem] flex-col rounded-2xl border border-slate-100 bg-white p-5 text-right shadow-sm transition-all hover:border-blue-200 hover:shadow-xl"
+                  className="group flex min-h-[14.5rem] flex-col overflow-hidden rounded-[1.85rem] border border-white/80 bg-white p-5 text-right shadow-[0_18px_45px_-32px_rgba(15,23,42,0.28)] transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_24px_55px_-34px_rgba(59,130,246,0.28)]"
                 >
                   <div className="mb-3 flex items-start justify-between">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase text-slate-500">{product.code}</span>
@@ -441,8 +443,8 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                       {product.stock_quantity > 0 ? `متاح: ${product.stock_quantity}` : 'نفد'}
                     </span>
                   </div>
-                  <h3 className="mb-1 truncate text-lg font-black text-slate-800 group-hover:text-blue-600">{product.name}</h3>
-                  <p className="mb-4 min-h-10 line-clamp-2 text-xs text-slate-400">{product.description || product.category}</p>
+                  <h3 className="mb-2 line-clamp-2 text-lg font-black leading-8 text-slate-800 transition group-hover:text-blue-600">{product.name}</h3>
+                  <p className="mb-5 min-h-[2.75rem] line-clamp-2 text-xs font-bold leading-6 text-slate-400">{product.description || product.category || 'منتج جاهز للإضافة مباشرة إلى الفاتورة.'}</p>
                   <div className="mt-auto flex items-end justify-between">
                     <div>
                       {product.price_sell_after && product.price_sell_after < product.price_sell_before ? (
@@ -471,7 +473,10 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             </div>
           </div>
 
-          <div ref={cartPanelRef} className="order-1 z-10 flex w-full flex-col border-r border-slate-100 bg-white shadow-xl lg:order-2 lg:w-[440px]">
+          <div
+            ref={cartPanelRef}
+            className="order-1 z-10 flex w-full flex-col border-r border-slate-100 bg-white shadow-xl lg:order-2 lg:self-start lg:sticky lg:top-[7.75rem] lg:h-[calc(100vh-9rem)] lg:w-[380px] xl:w-[410px] 2xl:w-[440px] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-white/70 lg:shadow-[0_24px_65px_-36px_rgba(15,23,42,0.35)]"
+          >
             <div className="space-y-4 border-b border-slate-50 p-4 sm:p-6">
               <div className="rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-5">
                 <div className="mb-4 flex items-center gap-3">
