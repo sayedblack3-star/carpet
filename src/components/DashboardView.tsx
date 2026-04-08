@@ -133,13 +133,13 @@ const DashboardView: React.FC = () => {
   });
 
   const StatCard = ({ icon: Icon, label, value, sub, color }: any) => (
-    <div className="bg-white p-6 rounded-3xl shadow-lg border border-slate-50 flex items-center gap-5">
+    <div className="bg-white p-5 sm:p-6 rounded-3xl shadow-lg border border-slate-50 flex items-center gap-4 sm:gap-5">
       <div className={`w-14 h-14 ${color} rounded-2xl flex items-center justify-center shrink-0`}>
         <Icon className="w-7 h-7" />
       </div>
       <div>
         <p className="text-xs font-bold text-slate-400 mb-1">{label}</p>
-        <h3 className="text-2xl font-black text-slate-800">
+        <h3 className="text-xl sm:text-2xl font-black text-slate-800">
           {value} <span className="text-xs text-slate-400">{sub}</span>
         </h3>
       </div>
@@ -150,19 +150,19 @@ const DashboardView: React.FC = () => {
     <div className="p-4 sm:p-8 max-w-7xl mx-auto min-h-full" dir="rtl">
       <header className="mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-800 flex items-center gap-3">
             <TrendingUp className="w-8 h-8 text-blue-600" />
             لوحة التحكم
           </h1>
           <p className="text-slate-500 font-medium mt-1">متابعة الأداء في الوقت الفعلي</p>
         </div>
 
-        <div className="flex bg-white p-1.5 rounded-2xl border shadow-sm">
+        <div className="grid grid-cols-2 sm:flex bg-white p-1.5 rounded-2xl border shadow-sm gap-1 w-full sm:w-auto">
           {(['today', 'week', 'month', 'all'] as const).map((range) => (
             <button
               key={range}
               onClick={() => setDateRange(range)}
-              className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
+              className={`px-4 sm:px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
                 dateRange === range ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'
               }`}
             >
@@ -200,7 +200,7 @@ const DashboardView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10">
-            <div className="bg-white p-8 rounded-3xl shadow-lg border min-w-0">
+            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border min-w-0">
               <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-2">
                 <TrendingUp className="w-6 h-6 text-blue-500" />
                 المبيعات آخر 7 أيام
@@ -216,7 +216,7 @@ const DashboardView: React.FC = () => {
               </ResponsiveContainer>
             </div>
 
-            <div className="bg-white p-8 rounded-3xl shadow-lg border">
+            <div className="bg-white p-5 sm:p-8 rounded-3xl shadow-lg border">
               <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
                 <Clock className="w-6 h-6 text-amber-500" />
                 آخر الطلبات
@@ -248,7 +248,7 @@ const DashboardView: React.FC = () => {
           </div>
 
           {lowStock.length > 0 && (
-            <div className="bg-amber-50 p-8 rounded-3xl border border-amber-200 mb-10">
+            <div className="bg-amber-50 p-5 sm:p-8 rounded-3xl border border-amber-200 mb-10">
               <h3 className="text-lg font-black text-amber-800 mb-4 flex items-center gap-2">
                 <AlertCircle className="w-6 h-6" />
                 تنبيهات المخزون المنخفض ({lowStock.length})

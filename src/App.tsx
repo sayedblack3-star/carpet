@@ -426,7 +426,7 @@ const App: React.FC = () => {
   const roleName = role === 'admin' ? 'المدير العام' : role === 'seller' ? 'بائع' : 'كاشير';
 
   return (
-    <div className="pharaonic-shell min-h-screen flex flex-col sm:flex-row overflow-hidden" dir="rtl">
+    <div className="pharaonic-shell min-safe-screen flex flex-col sm:flex-row overflow-hidden" dir="rtl">
       <Toaster position="top-center" richColors />
 
       <aside className="hidden sm:flex flex-col w-72 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-2xl z-50">
@@ -474,8 +474,8 @@ const App: React.FC = () => {
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className="sm:hidden bg-slate-900 text-white p-4 flex items-center justify-between shadow-lg z-50">
+      <main className="flex-1 flex flex-col min-safe-screen sm:h-screen overflow-hidden relative">
+        <header className="sm:hidden sticky top-0 bg-slate-900 text-white p-4 flex items-center justify-between shadow-lg z-50 safe-area-top safe-area-x">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileMenuOpen(true)} className="p-2 bg-white/10 rounded-lg">
               <Menu className="w-6 h-6" />
@@ -486,11 +486,11 @@ const App: React.FC = () => {
           <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center font-black text-xs">{profile.full_name?.[0]}</div>
         </header>
 
-        <div className="flex-1 overflow-y-auto bg-[#fafbfc]">{renderContent()}</div>
+        <div className="flex-1 overflow-y-auto bg-[#fafbfc] safe-area-bottom">{renderContent()}</div>
 
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] sm:hidden" onClick={() => setMobileMenuOpen(false)}>
-            <div className="w-80 h-full bg-slate-900 border-l border-white/5 p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="w-[min(22rem,100vw)] h-full bg-slate-900 border-l border-white/5 p-6 safe-area-top safe-area-bottom" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-10">
                 <div>
                   <h2 className="text-2xl font-black text-white">القائمة</h2>

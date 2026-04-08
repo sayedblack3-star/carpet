@@ -4,6 +4,7 @@ import { Branch, Profile, UserRole } from '../types';
 import { Users, Edit2, Shield, X, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2, UserPlus, Lock, Eye, EyeOff, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
+import { getApiUrl } from '../lib/appUrl';
 import { normalizeEmail, normalizeText, validateEmail, validateStrongPassword } from '../lib/security';
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -110,7 +111,7 @@ const UserManager: React.FC = () => {
         throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
       }
 
-      const response = await fetch('/api/admin/users', {
+      const response = await fetch(getApiUrl('/api/admin/users'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -278,20 +279,20 @@ const UserManager: React.FC = () => {
   );
 
   return (
-    <div className="h-full flex flex-col p-4 sm:p-8 space-y-8 overflow-y-auto" dir="rtl">
+    <div className="h-full flex flex-col p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8 overflow-y-auto" dir="rtl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-800">إدارة المستخدمين</h1>
           <p className="text-slate-400 font-medium mt-1">إدارة الموظفين وصلاحياتهم وربطهم بالفروع</p>
         </div>
-        <button onClick={() => setShowCreateModal(true)} className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-slate-800 active:scale-95">
+        <button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto px-5 py-3 bg-slate-900 text-white rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-slate-800 active:scale-95">
           <UserPlus className="w-5 h-5" /> إضافة موظف جديد
         </button>
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowCreateModal(false)}>
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={() => setShowCreateModal(false)}>
+          <div className="bg-white rounded-[2rem] sm:rounded-3xl p-5 sm:p-8 max-w-md w-full shadow-2xl border mt-6 sm:mt-0 max-h-[92dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><UserPlus className="w-5 h-5 text-blue-500" /> إنشاء حساب موظف</h2>
               <button onClick={() => setShowCreateModal(false)} className="p-2 hover:bg-slate-50 rounded-xl text-slate-400"><X className="w-5 h-5" /></button>
@@ -320,7 +321,7 @@ const UserManager: React.FC = () => {
               </div>
               <div>
                 <label className="text-xs font-bold text-slate-400 block mb-1">الدور الوظيفي</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(['seller', 'cashier', 'admin'] as UserRole[]).map((role) => (
                     <button key={role} type="button" onClick={() => setNewRole(role)} className={`py-3 rounded-xl font-bold text-sm transition-all ${newRole === role ? 'bg-slate-900 text-white shadow-lg' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                       {ROLE_LABELS[role]}
@@ -342,9 +343,9 @@ const UserManager: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 sm:gap-8">
         <div className="xl:col-span-4">
-          <div className="bg-white rounded-3xl p-8 border shadow-lg sticky top-4">
+          <div className="bg-white rounded-[2rem] sm:rounded-3xl p-5 sm:p-8 border shadow-lg xl:sticky xl:top-4">
             <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
               {isEditing ? <Edit2 className="w-5 h-5 text-blue-500" /> : <ShieldCheck className="w-5 h-5 text-amber-500" />}
               {isEditing ? 'تعديل المستخدم' : 'إدارة الصلاحيات'}
@@ -396,9 +397,9 @@ const UserManager: React.FC = () => {
               <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
               <input type="text" placeholder="ابحث بالاسم أو البريد أو الفرع..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pr-12 pl-4 py-3 bg-slate-50 border rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-100" />
             </div>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
+            <div className="grid grid-cols-3 w-full md:w-auto bg-slate-100 p-1 rounded-xl gap-1">
               {(['all', 'unapproved', 'active'] as const).map((filter) => (
-                <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-4 py-2 rounded-lg font-bold text-xs transition-all ${activeFilter === filter ? filter === 'unapproved' ? 'bg-amber-500 text-white' : filter === 'active' ? 'bg-emerald-500 text-white' : 'bg-white shadow text-slate-800' : 'text-slate-400'}`}>
+                <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-3 sm:px-4 py-2 rounded-lg font-bold text-xs transition-all ${activeFilter === filter ? filter === 'unapproved' ? 'bg-amber-500 text-white' : filter === 'active' ? 'bg-emerald-500 text-white' : 'bg-white shadow text-slate-800' : 'text-slate-400'}`}>
                   {filter === 'all' ? 'الكل' : filter === 'unapproved' ? 'بانتظار التفعيل' : 'نشط'}
                 </button>
               ))}
@@ -409,17 +410,17 @@ const UserManager: React.FC = () => {
             {loading
               ? [1, 2, 3, 4].map((i) => <div key={i} className="h-48 bg-white animate-pulse rounded-2xl border"></div>)
               : filtered.map((user) => (
-                  <div key={user.id} className="bg-white rounded-2xl p-6 border shadow-sm hover:shadow-lg transition-all relative overflow-hidden">
+                  <div key={user.id} className="bg-white rounded-2xl p-5 sm:p-6 border shadow-sm hover:shadow-lg transition-all relative overflow-hidden">
                     <div className={`absolute top-0 inset-x-0 h-1 ${user.is_approved ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></div>
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3">
+                    <div className="flex items-start justify-between gap-3 mb-4">
+                      <div className="flex items-center gap-3 min-w-0">
                         <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white relative">
                           <UserCheck className={`w-6 h-6 ${user.is_approved ? 'text-emerald-400' : 'text-amber-400'}`} />
                           {user.is_active && <div className="absolute -top-1 -left-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
                         </div>
-                        <div>
-                          <h3 className="text-lg font-black text-slate-800">{user.full_name}</h3>
-                          <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1"><Mail className="w-3 h-3" /> {user.email}</p>
+                        <div className="min-w-0">
+                          <h3 className="text-lg font-black text-slate-800 truncate">{user.full_name}</h3>
+                          <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 truncate"><Mail className="w-3 h-3 shrink-0" /> <span className="truncate">{user.email}</span></p>
                         </div>
                       </div>
                       <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${user.role === 'admin' ? 'bg-red-50 text-red-600' : user.role === 'cashier' ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-600'}`}>
@@ -440,7 +441,7 @@ const UserManager: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {!user.is_approved ? (
                         <button onClick={() => toggleApproval(user)} className="col-span-2 bg-amber-500 hover:bg-amber-600 text-white py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-amber-500/20">
                           <CheckCircle2 className="w-4 h-4" /> تفعيل الحساب
@@ -459,7 +460,7 @@ const UserManager: React.FC = () => {
                   </div>
                 ))}
             {!loading && filtered.length === 0 && (
-              <div className="col-span-2 text-center py-16 bg-slate-50 rounded-2xl border-2 border-dashed">
+              <div className="md:col-span-2 text-center py-16 bg-slate-50 rounded-2xl border-2 border-dashed">
                 <Users className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                 <p className="text-slate-400 font-bold">لا يوجد مستخدمون</p>
               </div>
