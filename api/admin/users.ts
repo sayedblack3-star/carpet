@@ -83,13 +83,14 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
 const getSupabaseServerConfig = () => {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !serviceRoleKey) {
-    throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.');
+  if (!url || !serviceRoleKey || !anonKey) {
+    throw new Error('Missing SUPABASE_URL/VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY.');
   }
 
-  return { url, serviceRoleKey };
+  return { url, anonKey, serviceRoleKey };
 };
 
 const createSupabaseServerClient = (url: string, key: string, accessToken?: string) =>
@@ -179,9 +180,9 @@ export default async function handler(request: Request) {
       return json(request, { error: 'Unsupported role.' }, 400);
     }
 
-    const { url, serviceRoleKey } = getSupabaseServerConfig();
+    const { url, anonKey, serviceRoleKey } = getSupabaseServerConfig();
     const adminClient = createSupabaseServerClient(url, serviceRoleKey);
-    const actorClient = createSupabaseServerClient(url, serviceRoleKey, accessToken);
+    const actorClient = createSupabaseServerClient(url, anonKey, accessToken);
 
     const {
       data: { user: actor },
