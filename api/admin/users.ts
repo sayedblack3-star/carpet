@@ -209,6 +209,34 @@ const finalizeProfileRecord = async (profileClient: ReturnType<typeof createSupa
   return { error: insertError };
 };
 
+const loadManagedUserProfile = async (
+  actorClient: ReturnType<typeof createSupabaseServerClient>,
+  adminClient: ReturnType<typeof createSupabaseServerClient>,
+  userId: string,
+) => {
+  const actorResult = await actorClient
+    .from('profiles')
+    .select('id, email, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (actorResult.data || !actorResult.error) {
+    return actorResult;
+  }
+
+  const adminResult = await adminClient
+    .from('profiles')
+    .select('id, email, role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (adminResult.data || !adminResult.error) {
+    return adminResult;
+  }
+
+  return actorResult;
+};
+
 export default async function handler(request: Request) {
   if (request.method === 'OPTIONS') {
     return empty(request);
@@ -251,13 +279,14 @@ export default async function handler(request: Request) {
         return json(request, { error: 'You cannot delete the currently signed-in admin.' }, 400);
       }
 
-      const { data: targetProfile, error: targetProfileError } = await adminClient
-        .from('profiles')
-        .select('id, email, role')
-        .eq('id', targetUserId)
-        .maybeSingle();
+      const { data: targetProfile, error: targetProfileError } = await loadManagedUserProfile(
+        actorClient,
+        adminClient,
+        targetUserId,
+      );
 
       if (targetProfileError) {
+        console.error('Managed profile lookup failed:', targetProfileError.message);
         return json(request, { error: 'Unable to load the selected user profile.' }, 500);
       }
 
