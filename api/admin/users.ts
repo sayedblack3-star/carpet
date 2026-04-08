@@ -349,13 +349,16 @@ const hasAnotherActiveApprovedAdmin = async (
   excludedUserId: string,
 ) => {
   const actorRestResult = await readActorRest<Array<{ id: string }>>(
-    `${url}/rest/v1/profiles?select=id&role=eq.admin&is_active=eq.true&is_approved=eq.true&id=neq.${encodeURIComponent(excludedUserId)}&limit=1`,
+    `${url}/rest/v1/profiles?select=id&role=eq.admin&is_active=eq.true&is_approved=eq.true&limit=10`,
     anonKey,
     accessToken,
   );
 
   if (!actorRestResult.error) {
-    return { hasAnotherAdmin: (actorRestResult.data || []).length > 0, error: null };
+    return {
+      hasAnotherAdmin: (actorRestResult.data || []).some((profile) => profile.id !== excludedUserId),
+      error: null,
+    };
   }
 
   const actorResult = await actorClient
