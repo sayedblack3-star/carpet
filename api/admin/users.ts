@@ -20,14 +20,45 @@ const ROLE_SET = new Set<UserRole>(['admin', 'seller', 'cashier']);
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
 };
+const CORS_ALLOWED_ORIGINS = new Set([
+  'http://localhost',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'https://carpet-rbnd.vercel.app',
+]);
+
+const getCorsHeaders = (request: Request) => {
+  const origin = request.headers.get('origin')?.trim();
+  const allowOrigin = origin && CORS_ALLOWED_ORIGINS.has(origin) ? origin : '*';
+
+  return {
+    'access-control-allow-origin': allowOrigin,
+    'access-control-allow-methods': 'POST, OPTIONS',
+    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-max-age': '86400',
+    vary: 'Origin',
+  };
+};
+
+const buildHeaders = (request: Request, headers: Record<string, string> = {}) => ({
+  ...getCorsHeaders(request),
+  ...headers,
+});
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ');
 const normalizeEmail = (value: string) => normalizeText(value).toLowerCase();
 
-const json = (body: unknown, status = 200) =>
+const json = (request: Request, body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: JSON_HEADERS,
+    headers: buildHeaders(request, JSON_HEADERS),
+  });
+
+const empty = (request: Request, status = 204) =>
+  new Response(null, {
+    status,
+    headers: buildHeaders(request),
   });
 
 const isMissingRelationError = (message: string) => /relation .* does not exist/i.test(message);
@@ -61,8 +92,12 @@ const createSupabaseServerClient = (url: string, key: string, accessToken?: stri
   });
 
 export default async function handler(request: Request) {
+  if (request.method === 'OPTIONS') {
+    return empty(request);
+  }
+
   if (request.method !== 'POST') {
-    return json({ error: 'Method not allowed.' }, 405);
+    return json(request, { error: 'Method not allowed.' }, 405);
   }
 
   try {
@@ -70,14 +105,14 @@ export default async function handler(request: Request) {
     const accessToken = authorization.replace(/^Bearer\s+/i, '').trim();
 
     if (!accessToken) {
-      return json({ error: 'Missing authorization token.' }, 401);
+      return json(request, { error: 'Missing authorization token.' }, 401);
     }
 
     let payload: CreateUserPayload;
     try {
       payload = (await request.json()) as CreateUserPayload;
     } catch {
-      return json({ error: 'Invalid JSON body.' }, 400);
+      return json(request, { error: 'Invalid JSON body.' }, 400);
     }
 
     const email = normalizeEmail(payload.email || '');
@@ -87,19 +122,19 @@ export default async function handler(request: Request) {
     const branchId = typeof payload.branch_id === 'string' ? normalizeText(payload.branch_id) : null;
 
     if (!email || !password || !fullName || !role) {
-      return json({ error: 'Email, password, full name, and role are required.' }, 400);
+      return json(request, { error: 'Email, password, full name, and role are required.' }, 400);
     }
 
     if (!EMAIL_PATTERN.test(email)) {
-      return json({ error: 'Please provide a valid email address.' }, 400);
+      return json(request, { error: 'Please provide a valid email address.' }, 400);
     }
 
     if (!STRONG_PASSWORD_PATTERN.test(password)) {
-      return json({ error: 'Password must be at least 10 characters and include uppercase, lowercase, and a number.' }, 400);
+      return json(request, { error: 'Password must be at least 10 characters and include uppercase, lowercase, and a number.' }, 400);
     }
 
     if (!ROLE_SET.has(role)) {
-      return json({ error: 'Unsupported role.' }, 400);
+      return json(request, { error: 'Unsupported role.' }, 400);
     }
 
     const { url, serviceRoleKey } = getSupabaseServerConfig();
@@ -112,7 +147,7 @@ export default async function handler(request: Request) {
     } = await adminClient.auth.getUser(accessToken);
 
     if (actorError || !actor) {
-      return json({ error: 'Invalid session token.' }, 401);
+      return json(request, { error: 'Invalid session token.' }, 401);
     }
 
     const { data: actorProfile, error: actorProfileError } = await actorClient
@@ -123,11 +158,11 @@ export default async function handler(request: Request) {
 
     if (actorProfileError) {
       console.error('Admin profile verification failed:', actorProfileError.message);
-      return json({ error: 'Unable to verify the current admin profile.' }, 500);
+      return json(request, { error: 'Unable to verify the current admin profile.' }, 500);
     }
 
     if (!actorProfile || actorProfile.role !== 'admin' || !actorProfile.is_active || !actorProfile.is_approved) {
-      return json({ error: 'Only active approved admins can create users.' }, 403);
+      return json(request, { error: 'Only active approved admins can create users.' }, 403);
     }
 
     const { error: branchFeatureError } = await actorClient.from('branches').select('id').limit(1);
@@ -135,13 +170,13 @@ export default async function handler(request: Request) {
 
     if (branchFeatureError && !isMissingRelationError(branchFeatureError.message)) {
       console.error('Branch feature verification failed:', branchFeatureError.message);
-      return json({ error: 'Unable to validate branch assignments.' }, 500);
+      return json(request, { error: 'Unable to validate branch assignments.' }, 500);
     }
 
     let effectiveBranchId: string | null = null;
     if (role !== 'admin' && branchFeatureEnabled) {
       if (!branchId) {
-        return json({ error: 'A branch is required for seller and cashier accounts.' }, 400);
+        return json(request, { error: 'A branch is required for seller and cashier accounts.' }, 400);
       }
 
       const { data: branch, error: branchError } = await actorClient
@@ -151,11 +186,11 @@ export default async function handler(request: Request) {
         .maybeSingle();
 
       if (branchError) {
-        return json({ error: 'Unable to validate the selected branch.' }, 500);
+        return json(request, { error: 'Unable to validate the selected branch.' }, 500);
       }
 
       if (!branch || branch.is_active === false) {
-        return json({ error: 'The selected branch is invalid or inactive.' }, 400);
+        return json(request, { error: 'The selected branch is invalid or inactive.' }, 400);
       }
 
       effectiveBranchId = branch.id;
@@ -173,7 +208,7 @@ export default async function handler(request: Request) {
     if (createUserError || !createdUserData.user) {
       const message = createUserError?.message || 'Failed to create the auth user.';
       const status = /already registered|already exists|duplicate/i.test(message) ? 409 : 400;
-      return json({ error: message }, status);
+      return json(request, { error: message }, status);
     }
 
     const createdUserId = createdUserData.user.id;
@@ -191,10 +226,11 @@ export default async function handler(request: Request) {
 
     if (profileError) {
       await adminClient.auth.admin.deleteUser(createdUserId);
-      return json({ error: 'Failed to finalize the user profile.' }, 500);
+      return json(request, { error: 'Failed to finalize the user profile.' }, 500);
     }
 
     return json(
+      request,
       {
         user: {
           id: createdUserId,
@@ -209,6 +245,6 @@ export default async function handler(request: Request) {
       201
     );
   } catch (error) {
-    return json({ error: getErrorMessage(error, 'Unexpected server error.') }, 500);
+    return json(request, { error: getErrorMessage(error, 'Unexpected server error.') }, 500);
   }
 }
