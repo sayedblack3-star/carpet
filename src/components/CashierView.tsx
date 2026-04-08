@@ -459,48 +459,53 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const selectedOrderDiscount = Math.max(0, (selectedOrder?.total_original_price || 0) - selectedOrderTotal);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-slate-50 lg:flex-row" dir="rtl">
-      <div className="z-20 flex w-full flex-col border-l border-slate-100 bg-white shadow-xl lg:w-[430px]">
-        <div className="space-y-4 border-b border-slate-50 p-5 sm:p-6">
-          <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg">
+    <div
+      className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.08),transparent_18%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] lg:flex-row"
+      dir="rtl"
+    >
+      <div className="z-20 flex w-full flex-col border-l border-slate-200/70 bg-white/90 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.45)] backdrop-blur-xl lg:w-[430px] xl:w-[460px]">
+        <div className="space-y-4 border-b border-slate-100 p-5 sm:p-6">
+          <div className="rounded-[2rem] bg-[#120b07] p-5 text-white shadow-[0_25px_60px_-30px_rgba(15,23,42,0.9)]">
+            <div className="flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-[1.35rem] bg-white/10 text-amber-300">
               <CreditCard className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-black text-slate-800">نظام التحصيل</h2>
-              <p className="text-xs font-bold text-slate-400">مراجعة الطلبات الواردة من البائعين والتحصيل والطباعة</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-3 py-3">
-              <p className="text-[10px] font-black text-blue-700">جاهزة للتحصيل</p>
-              <p className="mt-2 text-2xl font-black text-blue-900">{pendingCount}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3">
-              <p className="text-[10px] font-black text-amber-700">قيد المراجعة</p>
-              <p className="mt-2 text-2xl font-black text-amber-900">{reviewCount}</p>
-            </div>
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-3">
-              <p className="text-[10px] font-black text-emerald-700">مؤكدة</p>
-              <p className="mt-2 text-2xl font-black text-emerald-900">{confirmedCount}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            {branchEnabled && branchName && (
-              <div className="flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-900">
-                <Building2 className="h-4 w-4" /> {branchName}
               </div>
-            )}
+              <div>
+                <h2 className="text-xl font-black text-white">مركز التحصيل</h2>
+                <p className="text-xs font-bold text-white/60">مراجعة الطلبات واعتماد الدفع وطباعة الفاتورة</p>
+              </div>
+            </div>
 
-            <button
-              type="button"
-              onClick={() => void fetchOrders(false)}
-              className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> تحديث الآن
-            </button>
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <div className="rounded-[1.35rem] border border-white/10 bg-white/10 px-3 py-3">
+                <p className="text-[10px] font-black text-white/60">جاهزة</p>
+                <p className="mt-2 text-2xl font-black text-white">{pendingCount}</p>
+              </div>
+              <div className="rounded-[1.35rem] border border-white/10 bg-white/10 px-3 py-3">
+                <p className="text-[10px] font-black text-white/60">مراجعة</p>
+                <p className="mt-2 text-2xl font-black text-amber-300">{reviewCount}</p>
+              </div>
+              <div className="rounded-[1.35rem] border border-white/10 bg-white/10 px-3 py-3">
+                <p className="text-[10px] font-black text-white/60">مؤكدة</p>
+                <p className="mt-2 text-2xl font-black text-emerald-300">{confirmedCount}</p>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {branchEnabled && branchName && (
+                <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-black text-white">
+                  <Building2 className="h-4 w-4 text-amber-300" /> {branchName}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void fetchOrders(false)}
+                className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-black text-white/85 transition hover:bg-white/15"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /> تحديث
+              </button>
+            </div>
           </div>
 
           {realtimeFallbackActive && (
@@ -517,7 +522,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
               placeholder="ابحث برقم الفاتورة أو اسم البائع أو العميل أو كود البائع..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="w-full rounded-2xl border bg-slate-50 py-3 pr-12 pl-4 font-bold outline-none focus:ring-2 focus:ring-blue-100"
+              className="w-full rounded-[1.6rem] border border-white/70 bg-gradient-to-l from-slate-50 to-white py-3.5 pr-12 pl-4 font-bold text-slate-700 shadow-[0_16px_35px_-24px_rgba(15,23,42,0.28)] outline-none transition focus:border-amber-200 focus:ring-4 focus:ring-amber-100/70"
             />
           </div>
         </div>
@@ -537,14 +542,22 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                   onClick={() => {
                     void selectOrder(order);
                   }}
-                  className={`w-full rounded-2xl border p-5 text-right transition-all ${
-                    isSelected ? 'border-blue-600 bg-blue-600 text-white shadow-xl' : 'border-slate-100 bg-white shadow-sm hover:border-blue-200'
+                  className={`group relative w-full overflow-hidden rounded-[1.8rem] border p-5 text-right transition-all duration-200 ${
+                    isSelected
+                      ? 'border-slate-900 bg-[#120b07] text-white shadow-[0_24px_50px_-28px_rgba(15,23,42,0.7)]'
+                      : 'border-white/80 bg-white/95 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.32)] hover:-translate-y-0.5 hover:border-amber-100 hover:shadow-[0_26px_50px_-30px_rgba(245,158,11,0.3)]'
                   }`}
                 >
-                  <div className="mb-3 flex items-start justify-between gap-3">
+                  <div
+                    className={`absolute inset-x-0 top-0 h-1 ${
+                      isSelected ? 'bg-gradient-to-l from-amber-300 via-orange-300 to-amber-500' : 'bg-gradient-to-l from-transparent via-slate-200 to-transparent'
+                    }`}
+                  />
+
+                  <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <h4 className={`text-lg font-black ${isSelected ? 'text-white' : 'text-slate-800'}`}>#{order.order_number}</h4>
-                      <p className={`text-xs font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                      <h4 className={`text-lg font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>#{order.order_number}</h4>
+                      <p className={`text-xs font-bold ${isSelected ? 'text-white/60' : 'text-slate-400'}`}>
                         {format(new Date(order.created_at), 'hh:mm a')} - {order.salesperson_name}
                       </p>
                       {sellerCode && (
@@ -571,11 +584,20 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                     </span>
                   </div>
 
-                  <div className="flex items-end justify-between">
-                    <span className={`text-xl font-black ${isSelected ? 'text-white' : 'text-slate-800'}`}>
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className={`text-[10px] font-black tracking-[0.2em] ${isSelected ? 'text-white/40' : 'text-slate-400'}`}>TOTAL</p>
+                      <span className={`mt-1 block text-2xl font-black ${isSelected ? 'text-white' : 'text-slate-900'}`}>
                       {moneyFormatter.format(order.total_final_price || 0)} <small className="text-[10px] opacity-60">ج.م</small>
                     </span>
-                    <ChevronRight className="h-5 w-5 opacity-40" />
+                    </div>
+                    <div
+                      className={`flex h-10 w-10 items-center justify-center rounded-2xl transition ${
+                        isSelected ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-amber-50 group-hover:text-amber-600'
+                      }`}
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </div>
                   </div>
                 </button>
               );
@@ -583,8 +605,10 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
           )}
 
           {!loading && filteredOrders.length === 0 && (
-            <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 px-5 py-10 text-center">
-              <Receipt className="mx-auto mb-4 h-12 w-12 text-slate-300" />
+            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 px-5 py-10 text-center shadow-[0_18px_40px_-32px_rgba(15,23,42,0.3)]">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-[1.6rem] bg-slate-100 text-slate-400">
+                <Receipt className="h-8 w-8" />
+              </div>
               <p className="font-bold text-slate-500">لا توجد طلبات تطابق البحث الحالي.</p>
             </div>
           )}
@@ -597,26 +621,26 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
           {selectedOrder ? (
             <>
-              <div className="rounded-[2rem] border bg-white p-6 shadow-lg sm:p-8">
+              <div className="rounded-[2.25rem] border border-white/70 bg-white p-6 shadow-[0_30px_70px_-42px_rgba(15,23,42,0.38)] sm:p-8">
                 <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="mb-1 text-xs font-black uppercase text-slate-400">تفاصيل الفاتورة</p>
-                    <h1 className="text-2xl font-black text-slate-800">طلب رقم #{selectedOrder.order_number}</h1>
-                    <p className="mt-2 text-sm font-medium text-slate-500">راجع الأصناف، أكد التحصيل، أو اطبع الفاتورة النهائية.</p>
+                    <p className="mb-1 text-xs font-black uppercase tracking-[0.24em] text-slate-400">Invoice Review</p>
+                    <h1 className="text-2xl font-black text-slate-900 sm:text-3xl">طلب رقم #{selectedOrder.order_number}</h1>
+                    <p className="mt-2 text-sm font-bold text-slate-500">راجع الأصناف، أكد التحصيل، أو اطبع الفاتورة النهائية.</p>
                   </div>
 
                   <div className="flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={refreshSelectedOrder}
-                      className="flex items-center gap-2 rounded-2xl bg-slate-100 px-5 py-3 font-bold text-slate-600 transition hover:bg-slate-200"
+                      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                     >
                       <RefreshCw className="h-4 w-4" /> تحديث الأصناف
                     </button>
                     <button
                       type="button"
                       onClick={handlePrint}
-                      className="flex items-center gap-2 rounded-2xl bg-slate-100 px-5 py-3 font-bold text-slate-600 transition hover:bg-slate-200"
+                      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                     >
                       <Printer className="h-4 w-4" /> طباعة
                     </button>
@@ -626,40 +650,40 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         setSelectedOrder(null);
                         setOrderItems([]);
                       }}
-                      className="rounded-2xl bg-red-50 p-3 text-red-500 transition hover:bg-red-100"
+                      className="rounded-2xl border border-red-100 bg-red-50 p-3 text-red-500 transition hover:border-red-200 hover:bg-red-100"
                     >
                       <X className="h-5 w-5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-6 grid gap-4 rounded-[1.5rem] bg-slate-50 p-5 md:grid-cols-2 xl:grid-cols-5">
-                  <div>
+                <div className="mt-6 grid gap-4 rounded-[1.9rem] bg-gradient-to-b from-slate-50 to-white p-5 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
                     <p className="text-[10px] font-bold text-slate-400">البائع</p>
                     <p className="mt-1 flex items-center gap-1 text-sm font-black text-slate-800">
                       <User className="h-3 w-3 text-blue-500" /> {selectedOrder.salesperson_name}
                     </p>
                   </div>
-                  <div>
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
                     <p className="text-[10px] font-bold text-slate-400">كود البائع</p>
                     <p className="mt-1 text-sm font-black text-slate-800">{sellerCodeForSelected || '-'}</p>
                   </div>
-                  <div>
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
                     <p className="text-[10px] font-bold text-slate-400">العميل</p>
                     <p className="mt-1 text-sm font-black text-slate-800">{selectedOrder.customer_name || '-'}</p>
                   </div>
-                  <div>
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
                     <p className="text-[10px] font-bold text-slate-400">الهاتف</p>
                     <p className="mt-1 text-sm font-black text-slate-800">{selectedOrder.customer_phone || '-'}</p>
                   </div>
-                  <div>
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
                     <p className="text-[10px] font-bold text-slate-400">التوقيت</p>
                     <p className="mt-1 text-sm font-black text-slate-800">{format(new Date(selectedOrder.created_at), 'HH:mm - yyyy/MM/dd')}</p>
                   </div>
                 </div>
 
                 {selectedOrder.notes && (
-                  <div className="mt-4 flex items-start gap-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-4 text-amber-900">
+                  <div className="mt-4 flex items-start gap-3 rounded-[1.6rem] border border-amber-100 bg-gradient-to-l from-amber-50 to-orange-50 px-4 py-4 text-amber-900 shadow-[0_18px_36px_-30px_rgba(245,158,11,0.4)]">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
                       <p className="text-[11px] font-black text-amber-700">ملاحظات الفاتورة</p>
@@ -670,14 +694,14 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
               </div>
 
               {selectedOrder.status !== 'confirmed' && (
-                <div className="rounded-[2rem] border bg-white p-6 shadow-lg">
+                <div className="rounded-[2.1rem] border border-white/70 bg-white p-6 shadow-[0_28px_60px_-38px_rgba(15,23,42,0.32)]">
                   <div className="mb-4 flex items-start gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600">
                       <ScanSearch className="h-5 w-5" />
                     </div>
                     <div>
                       <h3 className="font-black text-slate-800">إضافة صنف إلى الفاتورة</h3>
-                      <p className="text-sm text-slate-500">أي تعديل هنا سيحوّل الطلب إلى حالة "قيد المراجعة" حتى يعتمد الكاشير الفاتورة.</p>
+                      <p className="text-sm font-bold text-slate-500">أي تعديل هنا سيحوّل الطلب إلى حالة "قيد المراجعة" حتى يعتمد الكاشير الفاتورة.</p>
                     </div>
                   </div>
 
@@ -688,7 +712,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                       placeholder="ابحث بكود المنتج أو الاسم لإضافته..."
                       value={productSearch}
                       onChange={(event) => setProductSearch(event.target.value)}
-                      className="w-full rounded-2xl border bg-slate-50 py-3 pr-12 pl-4 font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                      className="w-full rounded-[1.6rem] border border-white/70 bg-gradient-to-l from-slate-50 to-white py-3.5 pr-12 pl-4 font-bold text-slate-700 shadow-[0_16px_35px_-24px_rgba(15,23,42,0.28)] outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-100/70"
                     />
                   </div>
 
@@ -701,14 +725,14 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                           onClick={() => {
                             void addProductToOrder(product);
                           }}
-                          className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-right transition hover:border-blue-200 hover:bg-blue-50"
+                          className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-b from-white to-slate-50 p-4 text-right shadow-[0_16px_35px_-28px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="line-clamp-1 font-black text-slate-800">{product.name}</p>
                               <p className="mt-1 text-[11px] font-bold text-slate-400">{product.code}</p>
                             </div>
-                            <span className="rounded-xl bg-white px-3 py-1 text-[11px] font-black text-blue-600 shadow-sm">
+                            <span className="rounded-xl border border-blue-100 bg-white px-3 py-1 text-[11px] font-black text-blue-600 shadow-sm">
                               {moneyFormatter.format(product.price_sell_after || product.price_sell_before)} ج.م
                             </span>
                           </div>
@@ -718,17 +742,17 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                   )}
 
                   {productSearch.trim() && matchingProducts.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center font-bold text-slate-400">
+                    <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 text-center font-bold text-slate-400">
                       لا توجد منتجات مطابقة لهذا البحث.
                     </div>
                   )}
                 </div>
               )}
 
-              <div className="overflow-hidden rounded-[2rem] border bg-white shadow-lg">
-                <div className="flex flex-col gap-3 border-b bg-slate-50 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="overflow-hidden rounded-[2.1rem] border border-white/70 bg-white shadow-[0_30px_70px_-42px_rgba(15,23,42,0.35)]">
+                <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="flex items-center gap-2 font-black text-slate-800">
-                    <ShoppingCart className="h-5 w-5 text-blue-500" /> محتويات الفاتورة
+                    <ShoppingCart className="h-5 w-5 text-amber-500" /> محتويات الفاتورة
                   </h3>
                   <div className="flex flex-wrap items-center gap-3 text-xs font-black text-slate-500">
                     <span>{orderItems.length} صنف</span>
@@ -739,7 +763,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[42rem] text-right">
                     <thead>
-                      <tr className="border-b border-slate-50">
+                      <tr className="border-b border-slate-100 bg-slate-50/70">
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400">المنتج</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400">السعر</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400">الكمية</th>
@@ -747,7 +771,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         {selectedOrder.status !== 'confirmed' && <th className="px-6 py-4 text-[10px] font-bold text-slate-400">إجراء</th>}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody className="divide-y divide-slate-100">
                       {orderItems.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50/60">
                           <td className="px-6 py-4">
@@ -801,9 +825,9 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                   </table>
                 </div>
 
-                <div className="flex flex-col gap-6 bg-slate-900 p-6 text-white md:flex-row md:items-center md:justify-between md:p-8">
+                <div className="flex flex-col gap-6 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.16),transparent_24%),linear-gradient(135deg,#120b07_0%,#0f172a_100%)] p-6 text-white md:flex-row md:items-center md:justify-between md:p-8">
                   <div className="space-y-1">
-                    <p className="text-xs font-bold uppercase text-white/40">إجمالي التحصيل</p>
+                    <p className="text-xs font-black uppercase tracking-[0.24em] text-white/40">Settlement Total</p>
                     <span className="text-4xl font-black text-amber-500">{moneyFormatter.format(selectedOrderTotal)}</span>
                     <span className="mr-2 text-lg font-bold text-white/60">ج.م</span>
                     {selectedOrderDiscount > 0 && (
@@ -818,7 +842,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         onClick={() => {
                           void cancelOrder(selectedOrder);
                         }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/20 px-6 py-4 font-bold text-red-300 transition hover:bg-red-500/30"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-6 py-4 font-bold text-red-200 transition hover:bg-red-500/20"
                       >
                         <X className="h-5 w-5" /> إلغاء الطلب
                       </button>
@@ -827,13 +851,13 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         onClick={() => {
                           void markAsConfirmed(selectedOrder);
                         }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-500 px-8 py-4 font-black text-slate-950 shadow-xl transition hover:bg-amber-600"
+                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-400 px-8 py-4 font-black text-slate-950 shadow-[0_20px_45px_-18px_rgba(245,158,11,0.65)] transition hover:bg-amber-300"
                       >
                         <CheckCircle className="h-5 w-5" /> تأكيد التحصيل
                       </button>
                     </div>
                   ) : (
-                    <span className="flex items-center gap-2 rounded-xl bg-emerald-500/20 px-6 py-3 font-black text-emerald-400">
+                    <span className="flex items-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/15 px-6 py-3 font-black text-emerald-300">
                       <CheckCircle className="h-5 w-5" /> تم الدفع بنجاح
                     </span>
                   )}
@@ -841,13 +865,15 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
               </div>
             </>
           ) : (
-            <div className="rounded-[2rem] border border-dashed border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
-              <ShoppingCart className="mx-auto mb-5 h-16 w-16 text-slate-300" />
+            <div className="rounded-[2.2rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 px-6 py-12 text-center shadow-[0_25px_60px_-40px_rgba(15,23,42,0.25)]">
+              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[1.8rem] bg-slate-100 text-slate-400">
+                <ShoppingCart className="h-10 w-10" />
+              </div>
               <h2 className="mb-3 text-3xl font-black text-slate-800">في انتظار عملية جديدة</h2>
-              <p className="mx-auto max-w-xl text-lg font-medium text-slate-400">
+              <p className="mx-auto max-w-xl text-lg font-bold text-slate-400">
                 اختر فاتورة من القائمة لمراجعتها وتحصيلها أو لإضافة أصناف عليها قبل التأكيد.
               </p>
-              <div className="mx-auto mt-6 flex max-w-2xl items-start gap-3 rounded-[1.5rem] border border-blue-100 bg-blue-50 px-5 py-4 text-right text-sm font-bold text-blue-900">
+              <div className="mx-auto mt-6 flex max-w-2xl items-start gap-3 rounded-[1.7rem] border border-blue-100 bg-gradient-to-l from-blue-50 to-sky-50 px-5 py-4 text-right text-sm font-bold text-blue-900 shadow-[0_18px_38px_-30px_rgba(59,130,246,0.35)]">
                 <BadgeInfo className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
                 <span>أي تعديل يقوم به الكاشير على الفاتورة ينتقل مباشرة إلى البائع في شاشة متابعة مبيعاتي، لذلك ستبقى حالة الطلب "قيد المراجعة" حتى يتم التحصيل النهائي.</span>
               </div>
