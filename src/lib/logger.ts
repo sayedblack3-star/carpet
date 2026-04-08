@@ -47,21 +47,18 @@ export const logAction = async (action: string, details: string | any, branchId?
     const basePayload = {
       action,
       user_id: user.id,
-      user_email: user.email ?? null,
     };
-    const payloads = [
-      {
-        ...basePayload,
-        user_name: user.user_metadata?.full_name || user.user_metadata?.name || user.email || null,
-        entity_type: 'system',
-        details: auditDetails,
-      },
-      {
-        ...basePayload,
-        details: auditDetails,
-      },
-      basePayload,
-    ];
+    const emailPayload = user.email ? { ...basePayload, user_email: user.email } : basePayload;
+    const payloads = auditDetails
+      ? [
+          {
+            ...emailPayload,
+            details: auditDetails,
+          },
+          emailPayload,
+          basePayload,
+        ]
+      : [emailPayload, basePayload];
 
     let lastError: { message?: string | null } | null = null;
 
