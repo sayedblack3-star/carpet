@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../supabase';
 import { Branch, Order, OrderItem, Product, Profile, Shift } from '../types';
-import { BarChart, Bar, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   Activity,
   AlertCircle,
@@ -144,6 +144,8 @@ const DashboardView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange>('month');
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const [chartSize, setChartSize] = useState({ width: 0, height: 320 });
 
   const fetchData = async (isManualRefresh = false) => {
     if (isManualRefresh) {
@@ -232,6 +234,31 @@ const DashboardView: React.FC = () => {
 
     return () => window.clearInterval(intervalId);
   }, [dateRange]);
+
+  useEffect(() => {
+    const container = chartContainerRef.current;
+    if (!container) return;
+
+    const updateSize = () => {
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (width > 0 && height > 0) {
+        setChartSize((current) => (current.width === width && current.height === height ? current : { width, height }));
+      }
+    };
+
+    updateSize();
+
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateSize) : null;
+    observer?.observe(container);
+    window.addEventListener('resize', updateSize);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateSize);
+    };
+  }, []);
 
   const confirmed = useMemo(() => orders.filter((order) => order.status === 'confirmed'), [orders]);
   const pending = useMemo(() => orders.filter((order) => order.status === 'sent_to_cashier' || order.status === 'under_review'), [orders]);
@@ -478,9 +505,9 @@ const DashboardView: React.FC = () => {
 
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_0.9fr]">
               <SectionCard title="منحنى المبيعات" subtitle="حركة آخر 7 أيام بشكل سريع وواضح." icon={TrendingUp}>
-                <div className="h-80 min-w-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={last7Days}>
+                <div ref={chartContainerRef} className="h-80 min-w-0">
+                  {chartSize.width > 0 ? (
+                    <BarChart width={chartSize.width} height={chartSize.height} data={last7Days}>
                       <defs>
                         <linearGradient id="salesGradient" x1="0" x2="0" y1="0" y2="1">
                           <stop offset="0%" stopColor="#f59e0b" />
@@ -500,7 +527,9 @@ const DashboardView: React.FC = () => {
                       />
                       <Bar dataKey="sales" fill="url(#salesGradient)" radius={[12, 12, 4, 4]} barSize={34} />
                     </BarChart>
-                  </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full animate-pulse rounded-[1.6rem] bg-slate-100" />
+                  )}
                 </div>
               </SectionCard>
 
