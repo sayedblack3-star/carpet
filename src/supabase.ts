@@ -64,6 +64,19 @@ const readSessionWithRetry = async (attempt = 0): Promise<Session | null> => {
   }
 };
 
+const refreshSessionOnce = async () => {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.refreshSession();
+
+  if (error) {
+    throw error;
+  }
+
+  return session;
+};
+
 const isSessionUsable = (session: Session | null) => {
   if (!session) return false;
   if (!session.expires_at) return true;
@@ -71,16 +84,19 @@ const isSessionUsable = (session: Session | null) => {
 };
 
 export const getSafeSession = async (): Promise<Session | null> => {
-  if (authStateHydrated && isSessionUsable(cachedSession)) {
-    return cachedSession;
-  }
-
   if (!activeSessionRequest) {
-    activeSessionRequest = readSessionWithRetry()
-      .then((session) => {
-        cachedSession = session;
+    activeSessionRequest = (authStateHydrated && isSessionUsable(cachedSession) ? Promise.resolve(cachedSession) : readSessionWithRetry())
+      .then(async (session) => {
+        if (isSessionUsable(session)) {
+          cachedSession = session;
+          authStateHydrated = true;
+          return session;
+        }
+
+        const refreshedSession = await refreshSessionOnce();
+        cachedSession = refreshedSession;
         authStateHydrated = true;
-        return session;
+        return refreshedSession;
       })
       .finally(() => {
         activeSessionRequest = null;
