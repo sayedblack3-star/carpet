@@ -183,19 +183,12 @@ const UserManager: React.FC = () => {
         throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
       }
 
-      const response = await fetch(getApiUrl('/api/admin/users'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          email: cleanEmail,
-          password: newPassword,
-          full_name: cleanName,
-          role: newRole,
-          branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
-        }),
+      const response = await callAdminUsersApi('POST', {
+        email: cleanEmail,
+        password: newPassword,
+        full_name: cleanName,
+        role: newRole,
+        branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
       });
 
       const result = await response
@@ -338,14 +331,7 @@ const UserManager: React.FC = () => {
         throw new Error('انتهت الجلسة الحالية. سجل الدخول مرة أخرى ثم أعد المحاولة.');
       }
 
-      const response = await fetch(getApiUrl('/api/admin/users'), {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ user_id: userToDelete.id }),
-      });
+      const response = await callAdminUsersApi('DELETE', { user_id: userToDelete.id });
 
       const result = await response.json().catch(() => ({ error: 'Unexpected server response.' }));
       if (!response.ok) {
