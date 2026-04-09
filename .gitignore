@@ -12,3 +12,6 @@ android/.gradle/
 android/.idea/
 android/local.properties
 android/captures/
+desktop-release/
+release/
+*.tsbuildinfo

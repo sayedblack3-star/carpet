@@ -60,3 +60,23 @@ The web app stays exactly as-is. The Android app is an additional wrapper around
 2. Open Android Studio:
    `npm run mobile:open`
 3. In Android Studio, build a debug APK or release APK from the `android/` project.
+
+## Desktop App
+
+The desktop app is an Electron wrapper around the same React UI, the same Supabase database, and the same employee accounts.
+
+### Desktop commands
+
+- Run Electron with the local Vite dev server:
+  `npm run desktop:dev`
+- Build the web app and open it inside Electron:
+  `npm run desktop:start`
+- Build an unpacked Windows desktop app:
+  `npm run desktop:pack`
+- Build Windows installer/portable output:
+  `npm run desktop:dist`
+
+### Desktop output
+
+- Desktop build artifacts are generated in:
+  `desktop-release/`
