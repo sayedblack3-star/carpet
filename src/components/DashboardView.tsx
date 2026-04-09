@@ -24,6 +24,7 @@ import { format, startOfDay, subDays } from 'date-fns';
 
 const QUERY_TIMEOUT_MS = 6000;
 const QUERY_RETRY_DELAY_MS = 700;
+const DASHBOARD_POLL_INTERVAL_MS = 30000;
 
 type DateRange = 'today' | 'week' | 'month' | 'all';
 type StatTone = 'blue' | 'emerald' | 'amber' | 'slate' | 'rose';
@@ -76,6 +77,12 @@ const queryWithRetry = async <T,>(runQuery: () => Promise<T>, retries = 1): Prom
     await delay(QUERY_RETRY_DELAY_MS);
     return queryWithRetry(runQuery, retries - 1);
   }
+};
+
+const canRefreshDashboard = () => {
+  const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
+  const isOnline = typeof navigator === 'undefined' || navigator.onLine;
+  return isVisible && isOnline;
 };
 
 const toneStyles: Record<StatTone, string> = {
@@ -244,13 +251,35 @@ const DashboardView: React.FC = () => {
   };
 
   useEffect(() => {
-    void fetchData();
+    const refreshIfAvailable = (manual = false) => {
+      if (!canRefreshDashboard()) return;
+      void fetchData(manual);
+    };
+
+    refreshIfAvailable();
 
     const intervalId = window.setInterval(() => {
-      void fetchData();
-    }, 30000);
+      refreshIfAvailable();
+    }, DASHBOARD_POLL_INTERVAL_MS);
 
-    return () => window.clearInterval(intervalId);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshIfAvailable();
+      }
+    };
+
+    const handleOnline = () => {
+      refreshIfAvailable();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
+    };
   }, [dateRange]);
 
   useEffect(() => {
