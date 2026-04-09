@@ -20,6 +20,8 @@ export const supabase: SupabaseClient = supabaseConfigError
 const AUTH_LOCK_RETRY_DELAY_MS = 120;
 const AUTH_LOCK_MAX_RETRIES = 4;
 let activeSessionRequest: Promise<Session | null> | null = null;
+let cachedSession: Session | null = null;
+let authStateHydrated = false;
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -55,11 +57,28 @@ const readSessionWithRetry = async (attempt = 0): Promise<Session | null> => {
 };
 
 export const getSafeSession = async (): Promise<Session | null> => {
+  if (authStateHydrated) {
+    return cachedSession;
+  }
+
   if (!activeSessionRequest) {
-    activeSessionRequest = readSessionWithRetry().finally(() => {
-      activeSessionRequest = null;
-    });
+    activeSessionRequest = readSessionWithRetry()
+      .then((session) => {
+        cachedSession = session;
+        authStateHydrated = true;
+        return session;
+      })
+      .finally(() => {
+        activeSessionRequest = null;
+      });
   }
 
   return activeSessionRequest;
 };
+
+if (!supabaseConfigError) {
+  supabase.auth.onAuthStateChange((_event, session) => {
+    cachedSession = session;
+    authStateHydrated = true;
+  });
+}

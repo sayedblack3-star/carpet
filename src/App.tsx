@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getSafeSession, supabase, supabaseConfigError } from './supabase';
+import { supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
 import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
@@ -26,8 +26,6 @@ const TABS = [
   { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['admin'] as UserRole[] },
 ];
 
-const AUTH_BOOTSTRAP_TIMEOUT_MS = 6000;
-const AUTH_BOOTSTRAP_TIMEOUT_MESSAGE = 'Timed out while restoring the current session.';
 const PROFILE_LOAD_TIMEOUT_MS = 10000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
 const PROFILE_CACHE_KEY = 'carpet-land-profile-cache-v1';
@@ -130,7 +128,6 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
-  const authStateHandledRef = useRef(false);
   const profileRef = useRef<Profile | null>(null);
   const networkStateRef = useRef(isOnline);
 
@@ -189,8 +186,6 @@ const App: React.FC = () => {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (!isMounted) return;
-
-      authStateHandledRef.current = true;
       setSession(nextSession);
 
       if (nextSession) {
@@ -216,46 +211,6 @@ const App: React.FC = () => {
         setLoading(false);
       }
     });
-
-    const bootstrapAuth = async () => {
-      try {
-        const session = await withTimeout(getSafeSession(), AUTH_BOOTSTRAP_TIMEOUT_MS, AUTH_BOOTSTRAP_TIMEOUT_MESSAGE);
-
-        if (!isMounted || authStateHandledRef.current) return;
-
-        setSession(session);
-        if (session) {
-          const cachedProfile = readCachedProfile(session.user.id);
-
-          if (cachedProfile) {
-            setProfile(cachedProfile);
-            setLoading(false);
-            void fetchProfile(session.user);
-          } else {
-            setLoading(true);
-            await fetchProfile(session.user);
-          }
-
-          void fetchBranches();
-        } else {
-          setLoading(false);
-        }
-      } catch (err: any) {
-        const isSessionTimeout = err instanceof Error && err.message === AUTH_BOOTSTRAP_TIMEOUT_MESSAGE;
-        if (!isSessionTimeout) {
-          console.error('Error restoring session:', err);
-        }
-        if (!isMounted || authStateHandledRef.current) return;
-        setSession(null);
-        setProfile(null);
-        setLoading(false);
-        if (!isSessionTimeout) {
-          toast.error('تعذر استعادة الجلسة الحالية. يمكنك تسجيل الدخول يدويًا.');
-        }
-      }
-    };
-
-    bootstrapAuth();
 
     return () => {
       isMounted = false;

@@ -21,7 +21,7 @@ const Login: React.FC = () => {
     const normalizedEmail = normalizeEmail(email);
 
     try {
-      const { error } = await Promise.race([
+      const { data, error } = await Promise.race([
         supabase.auth.signInWithPassword({ email: normalizedEmail, password }),
         new Promise<never>((_, reject) => {
           window.setTimeout(() => reject(new Error('انتهت مهلة تسجيل الدخول. تحقق من اتصال الإنترنت وحاول مرة أخرى.')), LOGIN_TIMEOUT_MS);
@@ -38,9 +38,12 @@ const Login: React.FC = () => {
         return;
       }
 
-      void logAction('login_success', { email: normalizedEmail }).catch((logError) => {
-        console.warn('Login audit skipped:', logError);
-      });
+      const loginUserId = data?.user?.id;
+      window.setTimeout(() => {
+        void logAction('login_success', { email: normalizedEmail, user_id: loginUserId }).catch((logError) => {
+          console.warn('Login audit skipped:', logError);
+        });
+      }, 800);
 
       toast.success('أهلًا بك في كاربت لاند');
     } catch (error) {

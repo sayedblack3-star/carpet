@@ -54,17 +54,30 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const fallbackToastShownRef = useRef(false);
 
   useEffect(() => {
-    void getSafeSession()
-      .then((session) => {
-        if (session) setSessionUser(session.user);
-      })
-      .catch((error) => {
+    let isMounted = true;
+
+    const init = async () => {
+      try {
+        const session = await getSafeSession();
+        if (!isMounted) return;
+
+        if (session) {
+          setSessionUser(session.user);
+        }
+
+        await fetchOrders();
+        if (!isMounted) return;
+        await fetchProducts();
+        if (!isMounted) return;
+        await fetchSellerMeta();
+      } catch (error) {
         console.warn('Cashier session bootstrap skipped:', error);
-      });
+      }
+    };
 
-    void Promise.all([fetchOrders(), fetchProducts(), fetchSellerMeta()]);
+    void init();
 
-    return setupRealtimeFallback({
+    const cleanupRealtime = setupRealtimeFallback({
       fetchNow: () => fetchOrders(false),
       createChannel: () =>
         supabase
@@ -81,6 +94,11 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
         }
       },
     });
+
+    return () => {
+      isMounted = false;
+      cleanupRealtime?.();
+    };
   }, [branchId, branchEnabled]);
 
   const fetchOrders = async (showLoader = true) => {

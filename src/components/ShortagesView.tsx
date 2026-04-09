@@ -34,13 +34,31 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
   };
 
   useEffect(() => {
-    void fetchShortages();
-    return setupRealtimeFallback({
+    let isMounted = true;
+
+    const init = async () => {
+      try {
+        await getSafeSession();
+        if (!isMounted) return;
+        await fetchShortages();
+      } catch (error) {
+        console.warn('Shortages session bootstrap skipped:', error);
+      }
+    };
+
+    void init();
+
+    const cleanupRealtime = setupRealtimeFallback({
       fetchNow: fetchShortages,
       createChannel: () =>
         supabase.channel('shortages-sync').on('postgres_changes', { event: '*', schema: 'public', table: 'shortages' }, () => fetchShortages()),
       pollIntervalMs: 20000,
     });
+
+    return () => {
+      isMounted = false;
+      cleanupRealtime?.();
+    };
   }, [branchId, branchEnabled]);
 
   const handleAdd = async (e: React.FormEvent) => {

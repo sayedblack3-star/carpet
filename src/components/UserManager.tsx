@@ -47,15 +47,27 @@ const UserManager: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    fetchUsers();
-    fetchBranches();
-    void getSafeSession()
-      .then((session) => {
+    let isMounted = true;
+
+    const init = async () => {
+      try {
+        const session = await getSafeSession();
+        if (!isMounted) return;
+
         setCurrentUserId(session?.user?.id || null);
-      })
-      .catch((error) => {
+        await fetchBranches();
+        if (!isMounted) return;
+        await fetchUsers();
+      } catch (error) {
         console.warn('UserManager session bootstrap skipped:', error);
-      });
+      }
+    };
+
+    void init();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const branchLookup = useMemo(() => {

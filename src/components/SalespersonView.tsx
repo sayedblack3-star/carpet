@@ -55,30 +55,44 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const fallbackToastShownRef = useRef(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const init = async () => {
-      const session = await getSafeSession();
+      try {
+        const session = await getSafeSession();
+        if (!isMounted) return;
 
-      if (session) {
-        setSessionUser(session.user);
+        if (session) {
+          setSessionUser(session.user);
 
-        const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
-        if (data) {
-          const profile = data as Profile;
-          setCurrentProfile(profile);
-          setSellerForm({
-            full_name: profile.full_name || '',
-            employee_code: profile.employee_code || '',
-          });
-          void fetchMyOrders(session.user.id, profile.branch_id || branchId || undefined);
-        } else {
-          void fetchMyOrders(session.user.id, branchId || undefined);
+          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+          if (!isMounted) return;
+
+          if (data) {
+            const profile = data as Profile;
+            setCurrentProfile(profile);
+            setSellerForm({
+              full_name: profile.full_name || '',
+              employee_code: profile.employee_code || '',
+            });
+            await fetchMyOrders(session.user.id, profile.branch_id || branchId || undefined);
+          } else {
+            await fetchMyOrders(session.user.id, branchId || undefined);
+          }
         }
-      }
 
-      void fetchProducts();
+        if (!isMounted) return;
+        await fetchProducts();
+      } catch (error) {
+        console.warn('Salesperson session bootstrap skipped:', error);
+      }
     };
 
     void init();
+
+    return () => {
+      isMounted = false;
+    };
   }, [branchId]);
 
   useEffect(() => {
