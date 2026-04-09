@@ -1,3 +1,4 @@
+import { processLock } from '@supabase/auth-js';
 import { createClient, type Session, type SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -12,13 +13,19 @@ export const supabaseConfigError = missingSupabaseEnv.length
   ? `Missing Supabase environment variables: ${missingSupabaseEnv.join(', ')}`
   : null;
 
+const AUTH_LOCK_RETRY_DELAY_MS = 120;
+const AUTH_LOCK_MAX_RETRIES = 4;
 // The app shows a setup screen when config is missing, so this client is only used once env vars exist.
 export const supabase: SupabaseClient = supabaseConfigError
   ? ({} as SupabaseClient)
-  : createClient(supabaseUrl, supabaseAnonKey);
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        // Use an in-process queue instead of the browser Navigator Lock API to
+        // prevent startup request storms from stealing the shared auth lock.
+        lock: processLock,
+      },
+    });
 
-const AUTH_LOCK_RETRY_DELAY_MS = 120;
-const AUTH_LOCK_MAX_RETRIES = 4;
 let activeSessionRequest: Promise<Session | null> | null = null;
 let cachedSession: Session | null = null;
 let authStateHydrated = false;
