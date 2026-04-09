@@ -29,6 +29,7 @@ export const supabase: SupabaseClient = supabaseConfigError
 let activeSessionRequest: Promise<Session | null> | null = null;
 let cachedSession: Session | null = null;
 let authStateHydrated = false;
+const SESSION_EXPIRY_BUFFER_MS = 45 * 1000;
 
 const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
@@ -63,8 +64,14 @@ const readSessionWithRetry = async (attempt = 0): Promise<Session | null> => {
   }
 };
 
+const isSessionUsable = (session: Session | null) => {
+  if (!session) return false;
+  if (!session.expires_at) return true;
+  return session.expires_at * 1000 > Date.now() + SESSION_EXPIRY_BUFFER_MS;
+};
+
 export const getSafeSession = async (): Promise<Session | null> => {
-  if (authStateHydrated) {
+  if (authStateHydrated && isSessionUsable(cachedSession)) {
     return cachedSession;
   }
 
