@@ -53,7 +53,7 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-safe-screen safe-area-x safe-area-top safe-area-bottom flex items-center justify-center relative overflow-hidden bg-[#120b07] px-4 py-5 sm:p-6" dir="rtl">
+    <div className="min-safe-screen safe-area-x safe-area-top safe-area-bottom relative overflow-hidden bg-[#120b07] px-4 py-5 sm:p-6" dir="rtl">
       <div
         className="absolute inset-0 opacity-60"
         style={{
@@ -81,8 +81,82 @@ const Login: React.FC = () => {
         <path d="M28 108H132M34 98H126M42 88H118" stroke="currentColor" strokeDasharray="5 5" strokeWidth="3" strokeLinecap="round" />
       </svg>
 
-      <div className="relative z-10 w-full max-w-[480px]">
-        <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[3.5rem] border border-white/10 bg-white/[0.05] p-6 sm:p-12 shadow-[0_35px_120px_-20px_rgba(0,0,0,0.8)] backdrop-blur-3xl">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-2.5rem)] w-full max-w-[1480px] items-center justify-center xl:px-8">
+        <div className="grid w-full items-center gap-8 xl:grid-cols-[1.08fr_0.72fr] 2xl:grid-cols-[1.18fr_0.68fr]">
+          <section className="hidden xl:block">
+            <div className="relative overflow-hidden rounded-[3rem] border border-white/10 bg-white/[0.04] p-8 text-white shadow-[0_35px_120px_-32px_rgba(0,0,0,0.8)] backdrop-blur-3xl 2xl:p-10">
+              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+              <div className="absolute -left-12 bottom-0 h-48 w-48 rounded-full bg-amber-500/10 blur-3xl" />
+              <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-amber-300/10 blur-3xl" />
+
+              <div className="relative">
+                <div className="inline-flex items-center gap-3 rounded-full border border-amber-400/20 bg-amber-500/10 px-5 py-2 text-xs font-black tracking-[0.2em] text-amber-100">
+                  <Sparkles className="h-4 w-4 text-amber-300" />
+                  CARPET LAND ERP
+                </div>
+
+                <div className="mt-8 max-w-2xl">
+                  <div className="mb-6 flex items-center gap-4">
+                    <BrandMark iconOnly />
+                    <div>
+                      <p className="text-4xl font-black leading-none text-white">كاربت لاند</p>
+                      <p className="mt-2 text-sm font-black tracking-[0.24em] text-amber-100/75">CARPETS AND HOME TEXTILES</p>
+                    </div>
+                  </div>
+
+                  <h1 className="max-w-3xl text-5xl font-black leading-[1.15] text-white 2xl:text-6xl">
+                    نظام تشغيل موحد للبيع والتحصيل والإدارة داخل فروع
+                    <span className="text-amber-300"> كاربت لاند</span>
+                  </h1>
+                  <p className="mt-6 max-w-2xl text-lg font-bold leading-9 text-white/72">
+                    نفس الحسابات، نفس الصلاحيات، ونفس قاعدة البيانات على الويب والموبايل مع تجربة دخول سريعة وآمنة تناسب الاستخدام اليومي داخل النظام.
+                  </p>
+                </div>
+
+                <div className="mt-10 grid gap-4 2xl:grid-cols-3">
+                  <div className="rounded-[2rem] border border-white/8 bg-black/20 p-5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <ShieldCheck className="h-5 w-5 text-emerald-300" />
+                      <span className="text-[11px] font-black text-white/55">دخول آمن</span>
+                    </div>
+                    <p className="text-xl font-black text-white">نفس حساب الويب</p>
+                    <p className="mt-2 text-sm font-bold leading-6 text-white/60">الدخول من أي جهاز بنفس الصلاحيات والبيانات.</p>
+                  </div>
+
+                  <div className="rounded-[2rem] border border-white/8 bg-black/20 p-5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <Wifi className="h-5 w-5 text-amber-300" />
+                      <span className="text-[11px] font-black text-white/55">استجابة أوضح</span>
+                    </div>
+                    <p className="text-xl font-black text-white">تنبيهات واضحة</p>
+                    <p className="mt-2 text-sm font-bold leading-6 text-white/60">رسائل مباشرة لو النت ضعيف أو العملية تحتاج إعادة محاولة.</p>
+                  </div>
+
+                  <div className="rounded-[2rem] border border-white/8 bg-black/20 p-5">
+                    <div className="mb-4 flex items-center justify-between">
+                      <LogIn className="h-5 w-5 text-sky-300" />
+                      <span className="text-[11px] font-black text-white/55">وصول أسرع</span>
+                    </div>
+                    <p className="text-xl font-black text-white">واجهة مهيأة للويب</p>
+                    <p className="mt-2 text-sm font-bold leading-6 text-white/60">مساحة أوضح على الشاشات الكبيرة بدون فقدان هوية النظام.</p>
+                  </div>
+                </div>
+
+                <div className="mt-10 flex items-center justify-between rounded-[2rem] border border-white/8 bg-black/20 px-6 py-5">
+                  <div>
+                    <p className="text-sm font-black text-white/55">الحساب النشط</p>
+                    <p className="mt-2 text-xl font-black text-white">الأستاذ احمد السويفي</p>
+                  </div>
+                  <div className="rounded-full border border-amber-400/20 bg-amber-500/10 px-5 py-2 text-sm font-black text-amber-200">
+                    Carpet Land ERP v5.0
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="relative mx-auto w-full max-w-[520px] xl:max-w-none">
+        <div className="relative overflow-hidden rounded-[2rem] sm:rounded-[3.5rem] border border-white/10 bg-white/[0.05] p-6 sm:p-12 shadow-[0_35px_120px_-20px_rgba(0,0,0,0.8)] backdrop-blur-3xl xl:p-10 2xl:p-12">
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="absolute inset-x-12 top-32 h-px bg-gradient-to-r from-transparent via-amber-300/30 to-transparent" />
 
@@ -175,6 +249,8 @@ const Login: React.FC = () => {
               <Sparkles className="w-4 h-4" /> Carpet Land ERP v5.0
             </div>
           </div>
+        </div>
+      </div>
         </div>
       </div>
 
