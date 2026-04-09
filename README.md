@@ -75,8 +75,19 @@ The desktop app is an Electron wrapper around the same React UI, the same Supaba
   `npm run desktop:pack`
 - Build Windows installer/portable output:
   `npm run desktop:dist`
+- Build and publish a Windows release for auto-update:
+  `npm run desktop:publish`
 
 ### Desktop output
 
 - Desktop build artifacts are generated in:
   `desktop-release/`
+
+### Desktop auto-update
+
+- The desktop app is wired to check for updates from GitHub Releases.
+- Updates are checked automatically when the packaged app starts.
+- When a newer version is downloaded, the app will prompt the user to restart and install it.
+- To publish an update, create a new desktop build with a higher `version` in `package.json`, then publish the Windows artifacts to the GitHub repository releases.
+- If you want `electron-builder` to publish directly, set `GH_TOKEN` before running:
+  `npm run desktop:publish`

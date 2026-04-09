@@ -23,6 +23,48 @@ const EMPTY_FORM: Partial<Profile> = {
   is_active: true,
 };
 
+const getFreshAdminAccessToken = async () => {
+  const session = await getSafeSession();
+
+  if (!session?.access_token) {
+    throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
+  }
+
+  return session.access_token;
+};
+
+const refreshAdminAccessToken = async () => {
+  const { data, error } = await supabase.auth.refreshSession();
+
+  if (error || !data.session?.access_token) {
+    throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
+  }
+
+  return data.session.access_token;
+};
+
+const callAdminUsersApi = async (method: 'POST' | 'DELETE', payload: Record<string, any>) => {
+  const executeRequest = async (accessToken: string) =>
+    fetch(getApiUrl('/api/admin/users'), {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+  let accessToken = await getFreshAdminAccessToken();
+  let response = await executeRequest(accessToken);
+
+  if (response.status === 401) {
+    accessToken = await refreshAdminAccessToken();
+    response = await executeRequest(accessToken);
+  }
+
+  return response;
+};
+
 const UserManager: React.FC = () => {
   const [users, setUsers] = useState<Profile[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);

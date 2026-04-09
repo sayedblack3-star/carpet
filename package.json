@@ -1,9 +1,13 @@
 {
   "name": "react-example",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.1",
   "description": "Carpet Land ERP for web, Android, and Windows desktop.",
   "author": "Carpet Land",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sayedblack3-star/carpet.git"
+  },
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -17,6 +21,7 @@
     "desktop:start": "npm run build && electron .",
     "desktop:pack": "npm run build && electron-builder --dir",
     "desktop:dist": "npm run build && electron-builder --win nsis portable",
+    "desktop:publish": "npm run build && electron-builder --win nsis portable --publish always",
     "mobile:copy": "npm run build && npx cap copy",
     "mobile:sync": "npm run build && npx cap sync android",
     "mobile:android": "npm run mobile:sync",
@@ -35,6 +40,8 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.8.3",
     "express": "^4.21.2",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -72,7 +79,15 @@
       "package.json"
     ],
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "sayedblack3-star",
+        "repo": "carpet"
+      }
+    ],
     "win": {
+      "icon": "electron/assets/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         "nsis",

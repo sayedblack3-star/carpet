@@ -37,7 +37,7 @@ const ShiftManager: React.FC<ShiftManagerProps> = ({ userId, branchId, variant =
           .from('shifts')
           .select('*')
           .eq('user_id', userId)
-          .eq('status', 'active')
+          .eq('status', 'open')
           .order('start_time', { ascending: false })
           .limit(1)
           .maybeSingle(),
@@ -104,7 +104,7 @@ const ShiftManager: React.FC<ShiftManagerProps> = ({ userId, branchId, variant =
         {
           user_id: userId,
           branch_id: branchId,
-          status: 'active',
+          status: 'open',
           starting_cash: cash,
           start_time: new Date().toISOString(),
         },

@@ -322,6 +322,9 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const originalSubtotal = cart.reduce((sum, item) => sum + item.price_sell_before * item.cartQuantity, 0);
   const totalDiscount = Math.max(0, originalSubtotal - subtotal);
   const cartCount = cart.reduce((sum, item) => sum + item.cartQuantity, 0);
+  const activeSellerName = sellerForm.full_name || currentProfile?.full_name || 'البائع الحالي';
+  const activeBranchName = branchEnabled ? branchName || 'بدون فرع' : null;
+  const scrollToCartPanel = () => cartPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
     <div className="flex h-full flex-col bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.07),transparent_20%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]" dir="rtl">
@@ -338,22 +341,22 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           />
         </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-1 hide-scrollbar">
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3 sm:overflow-x-auto sm:pb-1 hide-scrollbar">
           <button
             onClick={() => setView('pos')}
-            className={`shrink-0 rounded-2xl px-5 py-3 font-black ${view === 'pos' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'pos' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
           >
             <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> نقطة البيع</span>
           </button>
           <button
             onClick={() => setView('history')}
-            className={`shrink-0 rounded-2xl px-5 py-3 font-black ${view === 'history' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'history' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
           >
             <span className="flex items-center gap-2"><HistoryIcon className="h-5 w-5" /> متابعة مبيعاتي</span>
           </button>
           <button
             onClick={() => setView('search')}
-            className={`shrink-0 rounded-2xl px-5 py-3 font-black ${view === 'search' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'search' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
           >
             <span className="flex items-center gap-2"><ScanSearch className="h-5 w-5" /> البحث بالكود</span>
           </button>
@@ -411,6 +414,18 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
       ) : view === 'pos' ? (
         <div className="mx-auto flex w-full max-w-[1900px] flex-1 flex-col overflow-hidden lg:flex-row lg:gap-6 lg:overflow-visible lg:px-4 lg:py-5">
           <div className="px-4 pt-4 lg:hidden">
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div className="rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
+                <p className="mb-1 text-[11px] font-black text-slate-400">البائع الحالي</p>
+                <p className="line-clamp-1 text-base font-black text-slate-900">{activeSellerName}</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-500">{sellerForm.employee_code || 'بدون كود'}</p>
+              </div>
+              <div className="rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
+                <p className="mb-1 text-[11px] font-black text-slate-400">الفرع والطلب</p>
+                <p className="line-clamp-1 text-base font-black text-slate-900">{activeBranchName || 'العمل بدون فروع'}</p>
+                <p className="mt-1 text-[11px] font-bold text-slate-500">{cartCount} قطعة جاهزة الآن</p>
+              </div>
+            </div>
             <div className="rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -425,7 +440,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
               {cartCount > 0 && (
                 <button
                   type="button"
-                  onClick={() => cartPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                  onClick={scrollToCartPanel}
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3 font-black text-white"
                 >
                   <ShoppingCart className="h-4 w-4" /> عرض السلة وبيانات الطلب
@@ -434,7 +449,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             </div>
           </div>
 
-          <div className="order-2 flex-1 overflow-y-auto p-4 sm:p-6 lg:order-1 lg:pr-0">
+          <div className="order-2 flex-1 overflow-y-auto px-4 pt-4 pb-28 sm:p-6 lg:order-1 lg:pb-6 lg:pr-0">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
               {filteredProducts.map((product) => (
                 <button
@@ -694,6 +709,36 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                 <p className="font-bold text-slate-400">لم تقم بإرسال أي فواتير حتى الآن.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {view === 'pos' && cartCount > 0 && (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-18px_45px_-25px_rgba(15,23,42,0.32)] backdrop-blur xl:hidden safe-area-bottom">
+          <div className="mx-auto flex max-w-3xl items-center gap-3">
+            <button
+              type="button"
+              onClick={scrollToCartPanel}
+              className="flex flex-1 items-center justify-between rounded-[1.5rem] bg-slate-950 px-4 py-3 text-white"
+            >
+              <span>
+                <span className="block text-[11px] font-bold text-slate-300">السلة الحالية</span>
+                <span className="block text-base font-black">{moneyFormatter.format(subtotal)} ج.م</span>
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-sm font-black">
+                <ShoppingCart className="h-4 w-4" /> {cartCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitOrder}
+              disabled={isSubmitting}
+              className={`flex min-h-14 shrink-0 items-center justify-center gap-2 rounded-[1.5rem] px-4 font-black ${
+                isSubmitting ? 'cursor-not-allowed bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+              }`}
+            >
+              <Send className="h-4 w-4" /> {isSubmitting ? 'جارٍ الإرسال' : 'إرسال'}
+            </button>
           </div>
         </div>
       )}

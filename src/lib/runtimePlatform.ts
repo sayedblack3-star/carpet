@@ -13,3 +13,14 @@ export const getRuntimePlatform = (): RuntimePlatform => {
 
   return 'web';
 };
+
+export const resolveRuntimeAssetPath = (assetPath: string): string => {
+  const sanitizedPath = assetPath.replace(/^\/+/, '');
+  const baseUrl = import.meta.env.BASE_URL || './';
+
+  if (!baseUrl || baseUrl === '/') {
+    return `/${sanitizedPath}`;
+  }
+
+  return `${baseUrl}${sanitizedPath}`;
+};

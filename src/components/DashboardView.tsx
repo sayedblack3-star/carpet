@@ -316,7 +316,7 @@ const DashboardView: React.FC = () => {
   const cashiers = users.filter((user) => user.role === 'cashier');
   const pendingApprovals = users.filter((user) => !user.is_approved).length;
   const inactiveUsers = users.filter((user) => !user.is_active).length;
-  const activeShifts = shifts.filter((shift) => shift.status === 'active');
+  const activeShifts = shifts.filter((shift) => shift.status === 'open');
   const closedToday = shifts.filter(
     (shift) => shift.status === 'closed' && shift.end_time && new Date(shift.end_time) >= startOfDay(new Date()),
   );
@@ -770,7 +770,7 @@ const DashboardView: React.FC = () => {
                           {latestShift ? format(new Date(latestShift.start_time), 'yyyy-MM-dd HH:mm') : 'لا توجد ورديات حديثة'}
                         </p>
                         <p className="mt-2 text-sm font-bold text-amber-800">
-                          {latestShift ? `الحالة: ${latestShift.status === 'active' ? 'نشطة' : 'مغلقة'}` : 'ابدأ أول وردية لتظهر هنا'}
+                    {latestShift ? `الحالة: ${latestShift.status === 'open' ? 'نشطة' : 'مغلقة'}` : 'ابدأ أول وردية لتظهر هنا'}
                         </p>
                       </div>
                       <div className="flex h-11 w-11 items-center justify-center rounded-[1.2rem] bg-white text-amber-500 shadow-sm">

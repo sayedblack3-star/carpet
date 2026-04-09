@@ -89,7 +89,7 @@ export interface Shift {
   id: string;
   user_id: string;
   branch_id?: string | null;
-  status: 'active' | 'closed';
+  status: 'open' | 'closed';
   start_time: string;
   end_time?: string | null;
   starting_cash?: number | null;

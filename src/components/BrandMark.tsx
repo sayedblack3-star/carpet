@@ -1,5 +1,5 @@
 import React from 'react';
-import { getRuntimePlatform, type RuntimePlatform } from '../lib/runtimePlatform';
+import { getRuntimePlatform, resolveRuntimeAssetPath, type RuntimePlatform } from '../lib/runtimePlatform';
 
 interface BrandMarkProps {
   className?: string;
@@ -57,6 +57,7 @@ const BrandMark: React.FC<BrandMarkProps> = ({
   const preset = PLATFORM_PRESETS[runtimePlatform];
   const resolvedTitle = title || preset.title;
   const resolvedSubtitle = subtitle || preset.subtitle;
+  const resolvedMarkSrc = resolveRuntimeAssetPath(preset.markSrc);
 
   return (
     <div className={`flex items-center gap-3 ${className}`} dir="rtl">
@@ -64,7 +65,7 @@ const BrandMark: React.FC<BrandMarkProps> = ({
         className={`relative shrink-0 overflow-hidden shadow-[0_22px_50px_-28px_rgba(245,158,11,0.7)] ring-1 ring-white/10 ${preset.wrapperClassName}`}
       >
         <img
-          src={preset.markSrc}
+          src={resolvedMarkSrc}
           alt="Carpet Land mark"
           className="h-full w-full object-cover"
           loading="eager"
