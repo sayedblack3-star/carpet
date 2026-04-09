@@ -132,6 +132,24 @@ const SectionCard = ({ title, subtitle, icon: Icon, children }: { title: string;
   </section>
 );
 
+const ReportMetric = ({
+  label,
+  value,
+  helper,
+  tone = 'slate',
+}: {
+  label: string;
+  value: string;
+  helper: string;
+  tone?: StatTone;
+}) => (
+  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+    <div className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] ${toneStyles[tone]}`}>{label}</div>
+    <p className="mt-4 text-2xl font-black text-slate-900">{value}</p>
+    <p className="mt-2 text-sm font-bold leading-6 text-slate-500">{helper}</p>
+  </div>
+);
+
 const DashboardView: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -276,6 +294,13 @@ const DashboardView: React.FC = () => {
   const fulfillmentRate = orders.length > 0 ? Math.round((confirmed.length / orders.length) * 100) : 0;
   const inventoryCoverage = products.length > 0 ? Math.max(0, Math.round(((products.length - lowStock.length) / products.length) * 100)) : 100;
   const confirmedOrderIds = new Set(confirmed.map((order) => order.id));
+  const cancelledOrders = orders.filter((order) => order.status === 'cancelled');
+  const underReviewOrders = orders.filter((order) => order.status === 'under_review');
+  const sentToCashierOrders = orders.filter((order) => order.status === 'sent_to_cashier');
+  const paidOrders = orders.filter((order) => order.payment_status === 'paid');
+  const unpaidOrders = orders.filter((order) => order.payment_status === 'unpaid');
+  const cancellationRate = orders.length > 0 ? Math.round((cancelledOrders.length / orders.length) * 100) : 0;
+  const paymentCollectionRate = orders.length > 0 ? Math.round((paidOrders.length / orders.length) * 100) : 0;
 
   const topProducts = useMemo(
     () =>
@@ -326,6 +351,97 @@ const DashboardView: React.FC = () => {
         }, {}),
       ).sort((left, right) => right.revenue - left.revenue),
     [branchNames, confirmed],
+  );
+
+  const sellerPerformance = useMemo(
+    () =>
+      Object.values(
+        confirmed.reduce<Record<string, { name: string; orders: number; revenue: number; avgTicket: number }>>((acc, order) => {
+          const key = order.salesperson_id || order.salesperson_name || 'unknown';
+          if (!acc[key]) {
+            acc[key] = {
+              name: order.salesperson_name || 'موظف غير محدد',
+              orders: 0,
+              revenue: 0,
+              avgTicket: 0,
+            };
+          }
+
+          acc[key].orders += 1;
+          acc[key].revenue += order.total_final_price || 0;
+          acc[key].avgTicket = acc[key].orders > 0 ? acc[key].revenue / acc[key].orders : 0;
+          return acc;
+        }, {}),
+      )
+        .sort((left, right) => right.revenue - left.revenue)
+        .slice(0, 5),
+    [confirmed],
+  );
+
+  const branchQueue = useMemo(
+    () =>
+      Object.values(
+        pending.reduce<Record<string, { name: string; pending: number; review: number }>>((acc, order) => {
+          const key = order.branch_id || 'unassigned';
+          if (!acc[key]) {
+            acc[key] = {
+              name: order.branch_id ? branchNames[order.branch_id] || 'فرع غير معروف' : 'بدون فرع',
+              pending: 0,
+              review: 0,
+            };
+          }
+
+          if (order.status === 'under_review') {
+            acc[key].review += 1;
+          } else {
+            acc[key].pending += 1;
+          }
+
+          return acc;
+        }, {}),
+      ).sort((left, right) => right.pending + right.review - (left.pending + left.review)),
+    [branchNames, pending],
+  );
+
+  const executiveReport = useMemo(
+    () => [
+      {
+        label: 'الطلبات الكلية',
+        value: orders.length.toLocaleString(),
+        helper: confirmed.length > 0 ? `${confirmed.length} مؤكدة و${pending.length} ما زالت في المسار التشغيلي` : 'ابدأ أول دورة بيع ليظهر التقرير التنفيذي',
+        tone: 'blue' as StatTone,
+      },
+      {
+        label: 'نسبة التحصيل',
+        value: `${paymentCollectionRate}%`,
+        helper: paidOrders.length > 0 ? `${paidOrders.length} طلبات مدفوعة مقابل ${unpaidOrders.length} غير مدفوعة` : 'لا توجد طلبات مدفوعة في الفترة الحالية',
+        tone: paidOrders.length > 0 ? ('emerald' as StatTone) : ('slate' as StatTone),
+      },
+      {
+        label: 'معدل الإلغاء',
+        value: `${cancellationRate}%`,
+        helper: cancelledOrders.length > 0 ? `${cancelledOrders.length} طلبات ملغاة تحتاج مراجعة السبب` : 'لا توجد طلبات ملغاة في الفترة الحالية',
+        tone: cancelledOrders.length > 0 ? ('rose' as StatTone) : ('slate' as StatTone),
+      },
+      {
+        label: 'الضغط على الكاشير',
+        value: pending.length.toLocaleString(),
+        helper: underReviewOrders.length > 0 ? `${underReviewOrders.length} تحت المراجعة و${sentToCashierOrders.length} بانتظار الاستلام` : 'قائمة التحصيل مستقرة الآن',
+        tone: pending.length > 0 ? ('amber' as StatTone) : ('emerald' as StatTone),
+      },
+    ],
+    [
+      cancelledOrders.length,
+      cancellationRate,
+      confirmed.length,
+      paidOrders.length,
+      paymentCollectionRate,
+      pending.length,
+      sentToCashierOrders.length,
+      underReviewOrders.length,
+      unpaidOrders.length,
+      orders.length,
+    ],
   );
 
   const last7Days = useMemo(
@@ -503,6 +619,59 @@ const DashboardView: React.FC = () => {
               />
             </div>
 
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+              <SectionCard title="التقرير التنفيذي" subtitle="ملخص مباشر للإدارة قبل الدخول في التفاصيل." icon={Activity}>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {executiveReport.map((item) => (
+                    <ReportMetric key={item.label} label={item.label} value={item.value} helper={item.helper} tone={item.tone} />
+                  ))}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="صحة التحصيل والتدفق" subtitle="أين يقف مسار البيع الآن، وأين يتجمع الضغط." icon={DollarSign}>
+                <div className="space-y-4">
+                  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black tracking-[0.16em] text-slate-400">طلبات جاهزة للكاشير</p>
+                        <p className="mt-2 text-2xl font-black text-slate-900">{sentToCashierOrders.length}</p>
+                        <p className="mt-2 text-sm font-bold text-slate-500">طلبات وصلت للكاشير ولم يبدأ إغلاقها بعد.</p>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-amber-50 text-amber-600">
+                        <Clock3 className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black tracking-[0.16em] text-slate-400">طلبات تحت المراجعة</p>
+                        <p className="mt-2 text-2xl font-black text-slate-900">{underReviewOrders.length}</p>
+                        <p className="mt-2 text-sm font-bold text-slate-500">تحتاج قرارًا من الكاشير قبل التأكيد أو الإلغاء.</p>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-blue-50 text-blue-600">
+                        <AlertCircle className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black tracking-[0.16em] text-slate-400">الإغلاق الناجح</p>
+                        <p className="mt-2 text-2xl font-black text-slate-900">{fulfillmentRate}%</p>
+                        <p className="mt-2 text-sm font-bold text-slate-500">نسبة الطلبات التي انتهت بمبيعات مؤكدة.</p>
+                      </div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-[1.2rem] bg-emerald-50 text-emerald-600">
+                        <CheckCircle2 className="h-5 w-5" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            </div>
+
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_0.9fr]">
               <SectionCard title="منحنى المبيعات" subtitle="حركة آخر 7 أيام بشكل سريع وواضح." icon={TrendingUp}>
                 <div ref={chartContainerRef} className="h-80 min-w-0">
@@ -669,6 +838,65 @@ const DashboardView: React.FC = () => {
                       ) : null}
                     </div>
                   </div>
+                </div>
+              </SectionCard>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <SectionCard title="أداء البائعين" subtitle="من يحرك الإيراد أكثر، ومن يحتاج دعمًا أو متابعة." icon={Users}>
+                <div className="space-y-3">
+                  {sellerPerformance.length > 0 ? (
+                    sellerPerformance.map((seller, index) => (
+                      <div key={`${seller.name}-${index}`} className="rounded-[1.6rem] border border-slate-100 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[1.2rem] bg-[#120b07] font-black text-white">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-slate-900">{seller.name}</p>
+                              <p className="mt-1 text-xs font-bold text-slate-500">{seller.orders} طلبات مؤكدة</p>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-black text-slate-900">{formatMoney(seller.revenue)}</p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">متوسط {formatMoney(seller.avgTicket)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm font-bold text-slate-400">
+                      لا توجد مبيعات مؤكدة كافية لإظهار ترتيب البائعين.
+                    </div>
+                  )}
+                </div>
+              </SectionCard>
+
+              <SectionCard title="ضغط الفروع على الكاشير" subtitle="الفروع التي عندها طوابير أو طلبات تحتاج متابعة أسرع." icon={Store}>
+                <div className="space-y-3">
+                  {branchQueue.length > 0 ? (
+                    branchQueue.slice(0, 6).map((branch) => (
+                      <div key={branch.name} className="rounded-[1.6rem] border border-slate-100 bg-slate-50 px-4 py-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-900">{branch.name}</p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {branch.pending} بانتظار التحصيل • {branch.review} تحت المراجعة
+                            </p>
+                          </div>
+                          <div className="text-left">
+                            <p className="text-xl font-black text-slate-900">{branch.pending + branch.review}</p>
+                            <p className="mt-1 text-xs font-bold text-slate-500">إجمالي المعلق</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-12 text-center text-sm font-bold text-slate-400">
+                      لا توجد طلبات معلقة على الفروع في الفترة الحالية.
+                    </div>
+                  )}
                 </div>
               </SectionCard>
             </div>
