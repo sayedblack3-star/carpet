@@ -360,8 +360,8 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const scrollToCartPanel = () => cartPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   return (
-    <div className="flex h-full flex-col bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.07),transparent_20%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]" dir="rtl">
-      <div className="sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-xl">
+    <div className="motion-page-enter flex h-full flex-col bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.07),transparent_20%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]" dir="rtl">
+      <div className="motion-panel-reveal sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1900px] flex-col gap-4 p-4 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
         <div className="relative w-full xl:w-[26rem]">
           <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
@@ -370,26 +370,26 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             placeholder="ابحث بكود المنتج أو الاسم..."
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-4 pr-12 pl-4 font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+            className="motion-interactive-outline w-full rounded-2xl border border-slate-200 bg-slate-50 py-4 pr-12 pl-4 font-bold outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           />
         </div>
 
         <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3 sm:overflow-x-auto sm:pb-1 hide-scrollbar">
           <button
             onClick={() => setView('pos')}
-            className={`rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'pos' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`motion-button motion-press rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'pos' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
           >
             <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> نقطة البيع</span>
           </button>
           <button
             onClick={() => setView('history')}
-            className={`rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'history' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`motion-button motion-press rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'history' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
           >
             <span className="flex items-center gap-2"><HistoryIcon className="h-5 w-5" /> متابعة مبيعاتي</span>
           </button>
           <button
             onClick={() => setView('search')}
-            className={`rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'search' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`motion-button motion-press rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'search' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
           >
             <span className="flex items-center gap-2"><ScanSearch className="h-5 w-5" /> البحث بالكود</span>
           </button>
@@ -448,18 +448,18 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         <div className="mx-auto flex w-full max-w-[1900px] flex-1 flex-col overflow-hidden lg:flex-row lg:gap-6 lg:overflow-visible lg:px-4 lg:py-5">
           <div className="px-4 pt-4 lg:hidden">
             <div className="mb-4 grid grid-cols-2 gap-3">
-              <div className="rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
+              <div className="motion-fade-up motion-soft-lift rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
                 <p className="mb-1 text-[11px] font-black text-slate-400">البائع الحالي</p>
                 <p className="line-clamp-1 text-base font-black text-slate-900">{activeSellerName}</p>
                 <p className="mt-1 text-[11px] font-bold text-slate-500">{sellerForm.employee_code || 'بدون كود'}</p>
               </div>
-              <div className="rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
+              <div className="motion-fade-up motion-fade-up-delay-1 motion-soft-lift rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
                 <p className="mb-1 text-[11px] font-black text-slate-400">الفرع والطلب</p>
                 <p className="line-clamp-1 text-base font-black text-slate-900">{activeBranchName || 'العمل بدون فروع'}</p>
                 <p className="mt-1 text-[11px] font-bold text-slate-500">{cartCount} قطعة جاهزة الآن</p>
               </div>
             </div>
-            <div className="rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-4 shadow-sm">
+            <div className="motion-panel-reveal rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="mb-1 text-[11px] font-black text-blue-700">ملخص سريع</p>
@@ -540,7 +540,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             className="order-1 z-10 flex w-full flex-col border-r border-slate-100 bg-white shadow-xl lg:order-2 lg:self-start lg:sticky lg:top-[7.75rem] lg:h-[calc(100vh-9rem)] lg:w-[380px] xl:w-[410px] 2xl:w-[440px] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-white/70 lg:shadow-[0_24px_65px_-36px_rgba(15,23,42,0.35)]"
           >
             <div className="space-y-4 border-b border-slate-50 p-4 sm:p-6">
-              <div className="rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-5">
+              <div className="motion-panel-reveal rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-5">
                 <div className="mb-4 flex items-center gap-3">
                   <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-600/20">
                     <User className="h-5 w-5" />
@@ -557,14 +557,14 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                     value={sellerForm.full_name}
                     onChange={(event) => setSellerForm((prev) => ({ ...prev, full_name: event.target.value }))}
                     placeholder="اسم البائع"
-                    className="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 font-bold outline-none focus:ring-4 focus:ring-blue-100"
+                    className="motion-interactive-outline w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 font-bold outline-none focus:ring-4 focus:ring-blue-100"
                   />
                   <input
                     type="text"
                     value={sellerForm.employee_code}
                     onChange={(event) => setSellerForm((prev) => ({ ...prev, employee_code: event.target.value }))}
                     placeholder="كود البائع"
-                    className="w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 font-bold outline-none focus:ring-4 focus:ring-blue-100"
+                    className="motion-interactive-outline w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 font-bold outline-none focus:ring-4 focus:ring-blue-100"
                   />
                   {branchEnabled && branchName && (
                     <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
@@ -577,7 +577,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                 <button
                   onClick={handleSaveSellerInfo}
                   disabled={savingSeller}
-                  className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3.5 font-black text-white hover:bg-slate-800 disabled:opacity-60"
+                  className="motion-button motion-press motion-shimmer mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 py-3.5 font-black text-white hover:bg-slate-800 disabled:opacity-60"
                 >
                   <Save className="h-4 w-4" /> {savingSeller ? 'جارٍ الحفظ...' : 'حفظ البيانات'}
                 </button>
@@ -672,7 +672,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
               <button
                 disabled={cart.length === 0 || isSubmitting}
                 onClick={handleSubmitOrder}
-                className={`flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl py-4 text-lg font-black ${
+                className={`motion-button motion-press motion-shimmer flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl py-4 text-lg font-black ${
                   cart.length === 0 || isSubmitting
                     ? 'cursor-not-allowed bg-slate-200 text-slate-400'
                     : 'bg-blue-600 text-white shadow-xl shadow-blue-600/30 hover:bg-blue-700'
@@ -752,7 +752,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             <button
               type="button"
               onClick={scrollToCartPanel}
-              className="flex flex-1 items-center justify-between rounded-[1.5rem] bg-slate-950 px-4 py-3 text-white"
+              className="motion-button motion-press motion-shimmer flex flex-1 items-center justify-between rounded-[1.5rem] bg-slate-950 px-4 py-3 text-white"
             >
               <span>
                 <span className="block text-[11px] font-bold text-slate-300">السلة الحالية</span>
@@ -766,7 +766,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
               type="button"
               onClick={handleSubmitOrder}
               disabled={isSubmitting}
-              className={`flex min-h-14 shrink-0 items-center justify-center gap-2 rounded-[1.5rem] px-4 font-black ${
+              className={`motion-button motion-press motion-shimmer flex min-h-14 shrink-0 items-center justify-center gap-2 rounded-[1.5rem] px-4 font-black ${
                 isSubmitting ? 'cursor-not-allowed bg-slate-200 text-slate-400' : 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
               }`}
             >

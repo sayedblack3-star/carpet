@@ -408,11 +408,11 @@ const App: React.FC = () => {
   const roleName = role === 'admin' ? 'المدير العام' : role === 'seller' ? 'بائع' : 'كاشير';
 
   return (
-    <div className="pharaonic-shell min-safe-screen flex flex-col sm:flex-row overflow-hidden" dir="rtl">
+    <div className="motion-page-enter pharaonic-shell min-safe-screen flex flex-col sm:flex-row overflow-hidden" dir="rtl">
       <Toaster position="top-center" richColors />
 
-      <aside className="hidden sm:flex flex-col w-72 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-2xl z-50">
-        <div className="p-8 border-b border-white/5 bg-white/5">
+      <aside className="motion-panel-reveal hidden sm:flex flex-col w-72 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-2xl z-50">
+        <div className="p-8 border-b border-white/5 bg-white/5 motion-shimmer">
           <BrandMark title={appClient.companyNameEn} subtitle={appClient.tagline} />
         </div>
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
@@ -420,8 +420,9 @@ const App: React.FC = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
+              data-active={activeTab === tab.id ? 'true' : 'false'}
               className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold transition-all ${
-                activeTab === tab.id ? 'bg-amber-500 text-white shadow-xl shadow-amber-500/25' : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                activeTab === tab.id ? 'motion-nav-pill motion-shimmer bg-amber-500 text-white shadow-xl shadow-amber-500/25' : 'motion-nav-pill text-slate-400 hover:bg-white/5 hover:text-white'
               }`}
             >
               <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-white' : 'text-slate-500'}`} />
@@ -430,7 +431,7 @@ const App: React.FC = () => {
           ))}
         </nav>
         <div className="p-4 border-t border-white/5 space-y-4">
-          <div className="px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
+          <div className="motion-soft-lift px-4 py-3 bg-white/5 rounded-2xl border border-white/5">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-black ring-2 ring-amber-500/30">
                 {profile.full_name?.[0] || 'U'}
@@ -449,7 +450,7 @@ const App: React.FC = () => {
               )}
             </div>
           </div>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-400/10 transition-all">
+          <button onClick={handleLogout} className="motion-button w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-400/10 transition-all">
             <LogOut className="w-5 h-5" />
             <span className="text-sm">خروج آمن</span>
           </button>
@@ -457,9 +458,9 @@ const App: React.FC = () => {
       </aside>
 
       <main className="flex-1 flex flex-col min-safe-screen sm:h-screen overflow-hidden relative">
-        <header className="sm:hidden sticky top-0 bg-slate-900 text-white p-4 flex items-center justify-between shadow-lg z-50 safe-area-top safe-area-x">
+        <header className="motion-panel-reveal sm:hidden sticky top-0 bg-slate-900 text-white p-4 flex items-center justify-between shadow-lg z-50 safe-area-top safe-area-x">
           <div className="flex items-center gap-3">
-            <button onClick={() => setMobileMenuOpen(true)} className="p-2 bg-white/10 rounded-lg">
+            <button onClick={() => setMobileMenuOpen(true)} className="motion-button p-2 bg-white/10 rounded-lg">
               <Menu className="w-6 h-6" />
             </button>
             <BrandMark iconOnly className="gap-0" />
@@ -475,17 +476,17 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto bg-[#fafbfc] safe-area-bottom">{renderContent()}</div>
+        <div className="motion-page-enter flex-1 overflow-y-auto bg-[#fafbfc] safe-area-bottom">{renderContent()}</div>
 
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] sm:hidden" onClick={() => setMobileMenuOpen(false)}>
-            <div className="w-[min(22rem,100vw)] h-full bg-slate-900 border-l border-white/5 p-6 safe-area-top safe-area-bottom" onClick={(e) => e.stopPropagation()}>
+            <div className="motion-panel-reveal w-[min(22rem,100vw)] h-full bg-slate-900 border-l border-white/5 p-6 safe-area-top safe-area-bottom" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-10">
                 <div>
                   <h2 className="text-2xl font-black text-white">القائمة</h2>
                   {branchFeatureEnabled && currentBranch && <p className="text-[11px] font-black text-blue-300 mt-1">{currentBranch.name}</p>}
                 </div>
-                <button onClick={() => setMobileMenuOpen(false)} className="p-2 bg-white/10 rounded-xl text-white">
+                <button onClick={() => setMobileMenuOpen(false)} className="motion-button p-2 bg-white/10 rounded-xl text-white">
                   <X className="w-6 h-6" />
                 </button>
               </div>
@@ -497,8 +498,9 @@ const App: React.FC = () => {
                       setActiveTab(tab.id);
                       setMobileMenuOpen(false);
                     }}
+                    data-active={activeTab === tab.id ? 'true' : 'false'}
                     className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${
-                      activeTab === tab.id ? 'bg-amber-500 text-white shadow-xl' : 'text-slate-400 hover:bg-white/5'
+                      activeTab === tab.id ? 'motion-nav-pill motion-shimmer bg-amber-500 text-white shadow-xl' : 'motion-nav-pill text-slate-400 hover:bg-white/5'
                     }`}
                   >
                     <tab.icon className="w-5 h-5" />
@@ -506,7 +508,7 @@ const App: React.FC = () => {
                   </button>
                 ))}
               </nav>
-              <button onClick={handleLogout} className="w-full mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-400/10">
+              <button onClick={handleLogout} className="motion-button w-full mt-8 flex items-center gap-4 px-6 py-4 rounded-2xl font-bold text-red-400 hover:bg-red-400/10">
                 <LogOut className="w-5 h-5" /> خروج آمن
               </button>
             </div>

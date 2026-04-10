@@ -481,7 +481,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
   return (
     <div
-      className="flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.08),transparent_18%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] lg:flex-row"
+      className="motion-page-enter flex h-full flex-col overflow-hidden bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.08),transparent_18%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] lg:flex-row"
       dir="rtl"
     >
       <div className="z-20 flex w-full flex-col border-l border-slate-200/70 bg-white/90 shadow-[0_24px_60px_-36px_rgba(15,23,42,0.45)] backdrop-blur-xl lg:w-[430px] xl:w-[460px]">
@@ -543,7 +543,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
               placeholder="ابحث برقم الفاتورة أو اسم البائع أو العميل أو كود البائع..."
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="w-full rounded-[1.6rem] border border-white/70 bg-gradient-to-l from-slate-50 to-white py-3.5 pr-12 pl-4 font-bold text-slate-700 shadow-[0_16px_35px_-24px_rgba(15,23,42,0.28)] outline-none transition focus:border-amber-200 focus:ring-4 focus:ring-amber-100/70"
+              className="motion-interactive-outline w-full rounded-[1.6rem] border border-white/70 bg-gradient-to-l from-slate-50 to-white py-3.5 pr-12 pl-4 font-bold text-slate-700 shadow-[0_16px_35px_-24px_rgba(15,23,42,0.28)] outline-none transition focus:border-amber-200 focus:ring-4 focus:ring-amber-100/70"
             />
           </div>
         </div>
@@ -646,7 +646,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
           {selectedOrder ? (
             <>
-              <div className="rounded-[2.25rem] border border-white/70 bg-white p-6 shadow-[0_30px_70px_-42px_rgba(15,23,42,0.38)] sm:p-8">
+              <div className="motion-panel-reveal rounded-[2.25rem] border border-white/70 bg-white p-6 shadow-[0_30px_70px_-42px_rgba(15,23,42,0.38)] sm:p-8">
                 <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="mb-1 text-xs font-black uppercase tracking-[0.24em] text-slate-400">Invoice Review</p>
@@ -658,14 +658,14 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                     <button
                       type="button"
                       onClick={refreshSelectedOrder}
-                      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                      className="motion-button motion-press flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                     >
                       <RefreshCw className="h-4 w-4" /> تحديث الأصناف
                     </button>
                     <button
                       type="button"
                       onClick={handlePrint}
-                      className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                      className="motion-button motion-press flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 font-bold text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
                     >
                       <Printer className="h-4 w-4" /> طباعة
                     </button>
@@ -675,7 +675,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         setSelectedOrder(null);
                         setOrderItems([]);
                       }}
-                      className="rounded-2xl border border-red-100 bg-red-50 p-3 text-red-500 transition hover:border-red-200 hover:bg-red-100"
+                      className="motion-button motion-press rounded-2xl border border-red-100 bg-red-50 p-3 text-red-500 transition hover:border-red-200 hover:bg-red-100"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -708,7 +708,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                 </div>
 
                 {selectedOrder.notes && (
-                  <div className="mt-4 flex items-start gap-3 rounded-[1.6rem] border border-amber-100 bg-gradient-to-l from-amber-50 to-orange-50 px-4 py-4 text-amber-900 shadow-[0_18px_36px_-30px_rgba(245,158,11,0.4)]">
+                  <div className="motion-fade-up mt-4 flex items-start gap-3 rounded-[1.6rem] border border-amber-100 bg-gradient-to-l from-amber-50 to-orange-50 px-4 py-4 text-amber-900 shadow-[0_18px_36px_-30px_rgba(245,158,11,0.4)]">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
                       <p className="text-[11px] font-black text-amber-700">ملاحظات الفاتورة</p>
@@ -719,7 +719,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
               </div>
 
               {selectedOrder.status !== 'confirmed' && (
-                <div className="rounded-[2.1rem] border border-white/70 bg-white p-6 shadow-[0_28px_60px_-38px_rgba(15,23,42,0.32)]">
+                <div className="motion-panel-reveal rounded-[2.1rem] border border-white/70 bg-white p-6 shadow-[0_28px_60px_-38px_rgba(15,23,42,0.32)]">
                   <div className="mb-4 flex items-start gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600">
                       <ScanSearch className="h-5 w-5" />
@@ -737,7 +737,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                       placeholder="ابحث بكود المنتج أو الاسم لإضافته..."
                       value={productSearch}
                       onChange={(event) => setProductSearch(event.target.value)}
-                      className="w-full rounded-[1.6rem] border border-white/70 bg-gradient-to-l from-slate-50 to-white py-3.5 pr-12 pl-4 font-bold text-slate-700 shadow-[0_16px_35px_-24px_rgba(15,23,42,0.28)] outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-100/70"
+                      className="motion-interactive-outline w-full rounded-[1.6rem] border border-white/70 bg-gradient-to-l from-slate-50 to-white py-3.5 pr-12 pl-4 font-bold text-slate-700 shadow-[0_16px_35px_-24px_rgba(15,23,42,0.28)] outline-none transition focus:border-blue-200 focus:ring-4 focus:ring-blue-100/70"
                     />
                   </div>
 
@@ -750,7 +750,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                           onClick={() => {
                             void addProductToOrder(product);
                           }}
-                          className="rounded-[1.5rem] border border-slate-100 bg-gradient-to-b from-white to-slate-50 p-4 text-right shadow-[0_16px_35px_-28px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50"
+                          className="motion-fade-up motion-soft-lift motion-glow rounded-[1.5rem] border border-slate-100 bg-gradient-to-b from-white to-slate-50 p-4 text-right shadow-[0_16px_35px_-28px_rgba(15,23,42,0.22)] transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
@@ -774,7 +774,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                 </div>
               )}
 
-              <div className="overflow-hidden rounded-[2.1rem] border border-white/70 bg-white shadow-[0_30px_70px_-42px_rgba(15,23,42,0.35)]">
+              <div className="motion-panel-reveal overflow-hidden rounded-[2.1rem] border border-white/70 bg-white shadow-[0_30px_70px_-42px_rgba(15,23,42,0.35)]">
                 <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-l from-slate-50 to-white p-5 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="flex items-center gap-2 font-black text-slate-800">
                     <ShoppingCart className="h-5 w-5 text-amber-500" /> محتويات الفاتورة
@@ -867,7 +867,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         onClick={() => {
                           void cancelOrder(selectedOrder);
                         }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-6 py-4 font-bold text-red-200 transition hover:bg-red-500/20"
+                        className="motion-button motion-press flex flex-1 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-6 py-4 font-bold text-red-200 transition hover:bg-red-500/20"
                       >
                         <X className="h-5 w-5" /> إلغاء الطلب
                       </button>
@@ -876,7 +876,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         onClick={() => {
                           void markAsConfirmed(selectedOrder);
                         }}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-400 px-8 py-4 font-black text-slate-950 shadow-[0_20px_45px_-18px_rgba(245,158,11,0.65)] transition hover:bg-amber-300"
+                        className="motion-button motion-press motion-shimmer flex flex-1 items-center justify-center gap-2 rounded-2xl bg-amber-400 px-8 py-4 font-black text-slate-950 shadow-[0_20px_45px_-18px_rgba(245,158,11,0.65)] transition hover:bg-amber-300"
                       >
                         <CheckCircle className="h-5 w-5" /> تأكيد التحصيل
                       </button>
