@@ -320,8 +320,9 @@ const DashboardView: React.FC = () => {
     if (!container) return;
 
     const updateSize = () => {
-      const width = container.clientWidth;
-      const height = container.clientHeight;
+      const rect = container.getBoundingClientRect();
+      const width = Math.round(rect.width || container.clientWidth || container.parentElement?.clientWidth || 0);
+      const height = Math.round(rect.height || container.clientHeight || 320);
 
       if (width > 0 && height > 0) {
         setChartSize((current) => (current.width === width && current.height === height ? current : { width, height }));
@@ -329,12 +330,14 @@ const DashboardView: React.FC = () => {
     };
 
     updateSize();
+    const rafId = window.requestAnimationFrame(updateSize);
 
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateSize) : null;
     observer?.observe(container);
     window.addEventListener('resize', updateSize);
 
     return () => {
+      window.cancelAnimationFrame(rafId);
       observer?.disconnect();
       window.removeEventListener('resize', updateSize);
     };
@@ -519,6 +522,8 @@ const DashboardView: React.FC = () => {
       }),
     [confirmed],
   );
+
+  const hasRecentSales = useMemo(() => last7Days.some((day) => day.sales > 0), [last7Days]);
 
   const spotlight = useMemo(() => {
     const leadingBranch = branchPerformance[0];
@@ -733,7 +738,7 @@ const DashboardView: React.FC = () => {
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_0.9fr]">
               <SectionCard title="منحنى المبيعات" subtitle="حركة آخر 7 أيام بشكل سريع وواضح." icon={TrendingUp}>
                 <div ref={chartContainerRef} className="h-80 min-w-0">
-                  {chartSize.width > 0 ? (
+                  {chartSize.width > 0 && hasRecentSales ? (
                     <BarChart width={chartSize.width} height={chartSize.height} data={last7Days}>
                       <defs>
                         <linearGradient id="salesGradient" x1="0" x2="0" y1="0" y2="1">
@@ -754,13 +759,23 @@ const DashboardView: React.FC = () => {
                       />
                       <Bar dataKey="sales" fill="url(#salesGradient)" radius={[12, 12, 4, 4]} barSize={34} />
                     </BarChart>
-                    ) : (
+                    ) : loading ? (
                       <LoadingState
                         title="جاري تجهيز الرسم"
                         subtitle="نجمع مؤشرات المبيعات ونبني نظرة سريعة للأداء."
                         compact
                         className="h-full min-h-[18rem]"
                       />
+                    ) : (
+                      <div className="motion-fade-up flex h-full min-h-[18rem] flex-col items-center justify-center rounded-[1.9rem] border border-dashed border-slate-200 bg-gradient-to-b from-slate-50 to-white px-6 text-center">
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-amber-50 text-amber-500 shadow-[0_18px_35px_-28px_rgba(245,158,11,0.55)]">
+                          <TrendingUp className="h-8 w-8" />
+                        </div>
+                        <h4 className="text-xl font-black text-slate-800">لا توجد مبيعات كافية لعرض المنحنى الآن</h4>
+                        <p className="mt-3 max-w-md text-sm font-bold leading-7 text-slate-500">
+                          أول ما تبدأ الفواتير المؤكدة في التحرك خلال آخر 7 أيام، سيظهر الرسم هنا تلقائيًا بشكل واضح.
+                        </p>
+                      </div>
                     )}
                   </div>
                 </SectionCard>
