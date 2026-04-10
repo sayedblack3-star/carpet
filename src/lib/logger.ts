@@ -44,6 +44,7 @@ export const logAction = async (action: string, details: string | any, branchId?
     if (!user) return;
 
     const auditDetails = buildAuditDetails(details, branchId);
+    const minimalAuditDetails = branchId ? { branch_id: branchId } : auditDetails;
     const basePayload = {
       action,
       user_id: user.id,
@@ -54,6 +55,10 @@ export const logAction = async (action: string, details: string | any, branchId?
           {
             ...emailPayload,
             details: auditDetails,
+          },
+          {
+            ...basePayload,
+            details: minimalAuditDetails,
           },
           emailPayload,
           basePayload,

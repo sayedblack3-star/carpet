@@ -5,8 +5,10 @@ import { LogIn, Mail, Lock, Sparkles, Eye, EyeOff, ShieldCheck, Wifi } from 'luc
 import BrandMark from './BrandMark';
 import { logAction } from '../lib/logger';
 import { normalizeEmail } from '../lib/security';
+import { appClient } from '../config/appClient';
 
 const LOGIN_TIMEOUT_MS = 7000;
+const loginOperatorLabel = appClient.webBadgeLabel;
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -45,7 +47,7 @@ const Login: React.FC = () => {
         });
       }, 800);
 
-      toast.success('أهلًا بك في كاربت لاند');
+      toast.success(`أهلًا بك في ${appClient.companyNameAr}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'تعذر إكمال تسجيل الدخول الآن.';
       console.warn('Login request failed:', message);
@@ -95,21 +97,21 @@ const Login: React.FC = () => {
               <div className="relative">
                 <div className="inline-flex items-center gap-3 rounded-full border border-amber-400/20 bg-amber-500/10 px-5 py-2 text-xs font-black tracking-[0.2em] text-amber-100">
                   <Sparkles className="h-4 w-4 text-amber-300" />
-                  CARPET LAND ERP
+                  {appClient.systemName.toUpperCase()}
                 </div>
 
                 <div className="mt-8 max-w-2xl">
                   <div className="mb-6 flex items-center gap-4">
                     <BrandMark iconOnly />
                     <div>
-                      <p className="text-4xl font-black leading-none text-white">كاربت لاند</p>
-                      <p className="mt-2 text-sm font-black tracking-[0.24em] text-amber-100/75">CARPETS AND HOME TEXTILES</p>
+                      <p className="text-4xl font-black leading-none text-white">{appClient.companyNameAr}</p>
+                      <p className="mt-2 text-sm font-black tracking-[0.24em] text-amber-100/75">{appClient.tagline}</p>
                     </div>
                   </div>
 
                   <h1 className="max-w-3xl text-5xl font-black leading-[1.15] text-white 2xl:text-6xl">
                     نظام تشغيل موحد للبيع والتحصيل والإدارة داخل فروع
-                    <span className="text-amber-300"> كاربت لاند</span>
+                    <span className="text-amber-300"> {appClient.companyNameAr}</span>
                   </h1>
                   <p className="mt-6 max-w-2xl text-lg font-bold leading-9 text-white/72">
                     نفس الحسابات، نفس الصلاحيات، ونفس قاعدة البيانات على الويب والموبايل مع تجربة دخول سريعة وآمنة تناسب الاستخدام اليومي داخل النظام.
@@ -148,10 +150,10 @@ const Login: React.FC = () => {
                 <div className="mt-10 flex items-center justify-between rounded-[2rem] border border-white/8 bg-black/20 px-6 py-5">
                   <div>
                     <p className="text-sm font-black text-white/55">الحساب النشط</p>
-                    <p className="mt-2 text-xl font-black text-white">الأستاذ احمد السويفي</p>
+                    <p className="mt-2 text-xl font-black text-white">{appClient.companyNameAr}</p>
                   </div>
                   <div className="rounded-full border border-amber-400/20 bg-amber-500/10 px-5 py-2 text-sm font-black text-amber-200">
-                    Carpet Land ERP v5.0
+                    {appClient.versionLabel}
                   </div>
                 </div>
               </div>
@@ -167,11 +169,11 @@ const Login: React.FC = () => {
             <div className="flex justify-center mb-5 sm:mb-6">
               <BrandMark iconOnly />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">كاربت لاند</h1>
-            <p className="text-amber-100/80 font-bold text-[11px] sm:text-sm tracking-[0.18em] sm:tracking-[0.24em] mb-4">CARPETS AND HOME TEXTILES</p>
+            <h1 className="text-3xl sm:text-4xl font-black text-white mb-2">{appClient.companyNameAr}</h1>
+            <p className="text-amber-100/80 font-bold text-[11px] sm:text-sm tracking-[0.18em] sm:tracking-[0.24em] mb-4">{appClient.tagline}</p>
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-black text-amber-100">
               <Sparkles className="w-4 h-4 text-amber-300" />
-              الاستاذ احمد السويفي
+              {loginOperatorLabel}
             </div>
           </div>
 
@@ -249,7 +251,7 @@ const Login: React.FC = () => {
           <div className="mt-8 border-t border-white/5 pt-6 text-center">
             <p className="text-slate-400 text-xs font-medium mb-3">نظام داخلي خاص بالسجاد والمفروشات - تواصل مع الإدارة للحصول على حساب</p>
             <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs font-black uppercase tracking-widest text-amber-500/80">
-              <Sparkles className="w-4 h-4" /> Carpet Land ERP v5.0
+              <Sparkles className="w-4 h-4" /> {appClient.versionLabel}
             </div>
           </div>
         </div>

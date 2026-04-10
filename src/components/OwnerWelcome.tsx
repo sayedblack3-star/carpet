@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { appClient } from '../config/appClient';
 
 interface OwnerWelcomeProps {
   onFinish: () => void;
@@ -174,7 +175,7 @@ const OwnerWelcome: React.FC<OwnerWelcomeProps> = ({ onFinish }) => {
           filter: 'drop-shadow(0 0 20px rgba(245,158,11,0.3))',
           letterSpacing: '2px',
         }}>
-          Carpet Land
+          {appClient.companyNameEn}
         </h1>
         <p style={{
           fontSize: '15px',
@@ -212,7 +213,7 @@ const OwnerWelcome: React.FC<OwnerWelcomeProps> = ({ onFinish }) => {
             marginBottom: '6px',
             fontFamily: 'Cairo, sans-serif',
           }}>
-            صاحب الشركة
+            نظام التشغيل
           </p>
           <p style={{
             fontSize: 'clamp(22px, 4vw, 32px)',
@@ -222,7 +223,7 @@ const OwnerWelcome: React.FC<OwnerWelcomeProps> = ({ onFinish }) => {
             letterSpacing: '1px',
             textShadow: '0 0 20px rgba(252,211,77,0.3)',
           }}>
-            الأستاذ / أحمد السويفي
+            {appClient.systemName}
           </p>
         </div>
 

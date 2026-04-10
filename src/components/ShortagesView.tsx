@@ -13,6 +13,15 @@ interface ShortagesViewProps {
   branchEnabled?: boolean;
 }
 
+type ShortageInsertPayload = {
+  product_name: string;
+  product_code: string;
+  notes: string;
+  reported_by_name: string;
+  reported_by_id?: string;
+  branch_id?: string | null;
+};
+
 export default function ShortagesView({ userName, branchId, branchName, branchEnabled = false }: ShortagesViewProps) {
   const [shortages, setShortages] = useState<Shortage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,13 +33,20 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
 
   const fetchShortages = async () => {
     setLoading(true);
-    let query = supabase.from('shortages').select('*');
-    if (branchEnabled && branchId) {
-      query = query.eq('branch_id', branchId);
+    try {
+      let query = supabase.from('shortages').select('*');
+      if (branchEnabled && branchId) {
+        query = query.eq('branch_id', branchId);
+      }
+      const { data, error } = await query.order('is_resolved', { ascending: true }).order('created_at', { ascending: false });
+      if (error) throw error;
+      setShortages((data || []) as Shortage[]);
+    } catch (error) {
+      console.error('Failed to fetch shortages:', error);
+      toast.error('تعذر تحميل قائمة النواقص الآن.');
+    } finally {
+      setLoading(false);
     }
-    const { data } = await query.order('is_resolved', { ascending: true }).order('created_at', { ascending: false });
-    if (data) setShortages(data as Shortage[]);
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -70,7 +86,7 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
 
     const session = await getSafeSession();
 
-    const payload: Record<string, any> = {
+    const payload: ShortageInsertPayload = {
       product_name: productName,
       product_code: productCode,
       notes,
@@ -82,22 +98,30 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
       payload.branch_id = branchId;
     }
 
-    const { error } = await supabase.from('shortages').insert(payload);
-    if (error) {
-      toast.error(`خطأ: ${error.message}`);
-      return;
-    }
+    try {
+      const { error } = await supabase.from('shortages').insert(payload);
+      if (error) throw error;
 
-    toast.success('تم تسجيل المنتج الناقص');
-    setProductName('');
-    setProductCode('');
-    setNotes('');
-    setActiveTab('list');
+      toast.success('تم تسجيل المنتج الناقص');
+      setProductName('');
+      setProductCode('');
+      setNotes('');
+      setActiveTab('list');
+      await fetchShortages();
+    } catch (error) {
+      toast.error(error instanceof Error ? `خطأ: ${error.message}` : 'تعذر تسجيل المنتج الناقص الآن.');
+    }
   };
 
   const toggleResolved = async (shortage: Shortage) => {
-    await supabase.from('shortages').update({ is_resolved: !shortage.is_resolved }).eq('id', shortage.id);
-    toast.success(shortage.is_resolved ? 'أعيد تسجيله كنقص' : 'تم توفير المنتج');
+    try {
+      const { error } = await supabase.from('shortages').update({ is_resolved: !shortage.is_resolved }).eq('id', shortage.id);
+      if (error) throw error;
+      toast.success(shortage.is_resolved ? 'أعيد تسجيله كنقص' : 'تم توفير المنتج');
+      await fetchShortages();
+    } catch (error) {
+      toast.error(error instanceof Error ? `تعذر تحديث حالة النقص: ${error.message}` : 'تعذر تحديث حالة النقص الآن.');
+    }
   };
 
   const copyShortage = async (shortage: Shortage) => {
@@ -105,8 +129,12 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
       .filter(Boolean)
       .join('\n');
 
-    await navigator.clipboard.writeText(text);
-    toast.success('تم نسخ بيانات المنتج الناقص');
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('تم نسخ بيانات المنتج الناقص');
+    } catch {
+      toast.error('تعذر نسخ بيانات المنتج الآن.');
+    }
   };
 
   const filtered = shortages.filter(

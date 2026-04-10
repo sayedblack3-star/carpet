@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import {
   AlertTriangle,
@@ -28,6 +29,7 @@ import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import { logAction } from '../lib/logger';
 import { toFriendlyErrorMessage } from '../lib/errorMessages';
 import ShiftManager from './ShiftManager';
+import { appClient } from '../config/appClient';
 
 type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
 
@@ -47,7 +49,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [sessionUser, setSessionUser] = useState<SupabaseUser | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [sellerMeta, setSellerMeta] = useState<SellerMeta>({});
   const [realtimeFallbackActive, setRealtimeFallbackActive] = useState(false);
@@ -393,7 +395,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
           <div class="sheet">
             <div class="header">
               <div class="brand">
-                <h1>Carpet Land</h1>
+                <h1>${appClient.companyNameEn}</h1>
                 <div>فاتورة تحصيل رقم #${selectedOrder.order_number}</div>
                 <div>${format(new Date(selectedOrder.created_at), 'yyyy-MM-dd HH:mm')}</div>
               </div>
@@ -436,7 +438,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
           <div class="summary-row total"><span>الإجمالي النهائي</span><span>${moneyFormatter.format(invoiceTotal)} ج.م</span></div>
         </div>
         ${selectedOrder.notes ? `<div class="note">ملاحظات: ${selectedOrder.notes}</div>` : ''}
-        <div class="footer">شكرًا لتعاملكم مع كاربت لاند</div>
+        <div class="footer">شكرًا لتعاملكم مع ${appClient.companyNameAr}</div>
       `,
     );
 

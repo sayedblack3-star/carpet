@@ -32,9 +32,16 @@ export default function ProductManager() {
 
   const fetchProducts = async () => {
     setLoading(true);
-    const { data } = await supabase.from('products').select('*').eq('is_deleted', false).order('created_at', { ascending: false });
-    if (data) setProducts(data as Product[]);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('products').select('*').eq('is_deleted', false).order('created_at', { ascending: false });
+      if (error) throw error;
+      setProducts((data || []) as Product[]);
+    } catch (error) {
+      console.error('Failed to fetch products:', error);
+      toast.error('تعذر تحميل المنتجات الآن.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,8 +75,9 @@ export default function ProductManager() {
 
       resetForm();
       fetchProducts();
-    } catch (err: any) {
-      toast.error(`خطأ: ${err.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'تعذر حفظ بيانات المنتج الآن.';
+      toast.error(`خطأ: ${message}`);
     }
   };
 
@@ -106,8 +114,9 @@ export default function ProductManager() {
       await logAction('products_imported', { imported_count: items.length });
       toast.success(`تم استيراد ${items.length} منتج بنجاح`);
       fetchProducts();
-    } catch (err: any) {
-      toast.error(`خطأ في الاستيراد: ${err.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'تعذر استيراد البيانات الآن.';
+      toast.error(`خطأ في الاستيراد: ${message}`);
     }
     setImporting(false);
   };

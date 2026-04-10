@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   BadgeInfo,
   Building2,
@@ -34,6 +35,25 @@ interface SalespersonViewProps {
   branchEnabled?: boolean;
 }
 
+type SellerProfileUpdatePayload = {
+  full_name: string;
+  employee_code: string | null;
+};
+
+type OrderInsertPayload = {
+  salesperson_id: string;
+  salesperson_name: string;
+  customer_name: string;
+  customer_phone: string;
+  status: 'sent_to_cashier';
+  payment_status: 'unpaid';
+  total_original_price: number;
+  total_final_price: number;
+  notes: string;
+  sent_to_cashier_at: string;
+  branch_id?: string | null;
+};
+
 const moneyFormatter = new Intl.NumberFormat('ar-EG');
 
 const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName, branchEnabled = false }) => {
@@ -45,7 +65,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const [customerPhone, setCustomerPhone] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
-  const [sessionUser, setSessionUser] = useState<any>(null);
+  const [sessionUser, setSessionUser] = useState<SupabaseUser | null>(null);
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [view, setView] = useState<'pos' | 'history' | 'search'>('pos');
   const [sellerForm, setSellerForm] = useState({ full_name: '', employee_code: '' });
@@ -65,10 +85,13 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         if (session) {
           setSessionUser(session.user);
 
-          const { data } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+          const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
           if (!isMounted) return;
 
-          if (data) {
+          if (error) {
+            console.warn('Failed to load seller profile:', error);
+            toast.error('تعذر تحميل بيانات البائع الحالية.');
+          } else if (data) {
             const profile = data as Profile;
             setCurrentProfile(profile);
             setSellerForm({
@@ -131,20 +154,30 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   }, [sessionUser?.id, currentProfile?.branch_id, branchId]);
 
   const fetchProducts = async () => {
-    const { data } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
-    if (data) setProducts(data as Product[]);
+    try {
+      const { data, error } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
+      if (error) throw error;
+      setProducts((data || []) as Product[]);
+    } catch (error) {
+      console.error('Failed to fetch products for seller:', error);
+      toast.error('تعذر تحميل المنتجات الآن.');
+    }
   };
 
   const fetchMyOrders = async (userId: string, activeBranchId?: string) => {
-    let query = supabase.from('orders').select('*').eq('salesperson_id', userId);
-    if (branchEnabled && activeBranchId) {
-      query = query.eq('branch_id', activeBranchId);
-    }
+    try {
+      let query = supabase.from('orders').select('*').eq('salesperson_id', userId);
+      if (branchEnabled && activeBranchId) {
+        query = query.eq('branch_id', activeBranchId);
+      }
 
-    const { data } = await query.order('created_at', { ascending: false }).limit(20);
-    if (data) {
-      setMyOrders(data as Order[]);
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(20);
+      if (error) throw error;
+      setMyOrders((data || []) as Order[]);
       setRealtimeFallbackActive(false);
+    } catch (error) {
+      console.error('Failed to fetch seller orders:', error);
+      toast.error('تعذر تحميل طلبات البائع الآن.');
     }
   };
 
@@ -196,7 +229,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 
     setSavingSeller(true);
     try {
-      const payload = {
+      const payload: SellerProfileUpdatePayload = {
         full_name: normalizeText(sellerForm.full_name),
         employee_code: normalizeText(sellerForm.employee_code) || null,
       };
@@ -250,7 +283,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
       const total = cart.reduce((sum, item) => sum + (item.price_sell_after || item.price_sell_before) * item.cartQuantity, 0);
       const originalTotal = cart.reduce((sum, item) => sum + item.price_sell_before * item.cartQuantity, 0);
 
-      const orderPayload: Record<string, any> = {
+      const orderPayload: OrderInsertPayload = {
         salesperson_id: sessionUser.id,
         salesperson_name: normalizeText(sellerForm.full_name) || currentProfile?.full_name || '',
         customer_name: normalizeText(customerName),
@@ -291,7 +324,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           items_count: items.length,
           total_final_price: total,
         },
-        orderPayload.branch_id,
+        orderPayload.branch_id || undefined,
       );
 
       toast.success('تم إرسال الفاتورة إلى الكاشير.');

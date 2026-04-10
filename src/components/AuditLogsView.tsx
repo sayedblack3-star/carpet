@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { format } from 'date-fns';
-import { Activity, Search, ShieldAlert, User, Clock, Store } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, ShieldAlert, User, Clock } from 'lucide-react';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
+import { toast } from 'sonner';
 
 interface Log {
   id: string;
@@ -35,17 +36,30 @@ export default function AuditLogsView() {
   const [logs, setLogs] = useState<Log[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 50;
 
   const fetchLogs = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('audit_logs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100);
+    try {
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+      const { data, error, count } = await supabase
+        .from('audit_logs')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
-    if (data) setLogs(data as Log[]);
-    setLoading(false);
+      if (error) throw error;
+      setLogs((data || []) as Log[]);
+      setTotalCount(count || 0);
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error);
+      toast.error('تعذر تحميل سجل العمليات الآن.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -58,7 +72,7 @@ export default function AuditLogsView() {
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'audit_logs' }, () => fetchLogs()),
       pollIntervalMs: 20000,
     });
-  }, []);
+  }, [page]);
 
   const filteredLogs = logs.filter(log => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -69,6 +83,9 @@ export default function AuditLogsView() {
       .toLowerCase()
       .includes(normalizedSearch);
   });
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const canGoPrev = page > 1;
+  const canGoNext = page < totalPages;
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto pharaonic-bg min-h-full" dir="rtl">
@@ -137,6 +154,29 @@ export default function AuditLogsView() {
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-bold text-slate-500">
+            صفحة {page} من {totalPages} • إجمالي السجلات {totalCount}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => canGoPrev && setPage((value) => value - 1)}
+              disabled={!canGoPrev}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ChevronRight className="h-4 w-4" /> السابقة
+            </button>
+            <button
+              type="button"
+              onClick={() => canGoNext && setPage((value) => value + 1)}
+              disabled={!canGoNext}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              التالية <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

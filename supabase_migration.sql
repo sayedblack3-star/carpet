@@ -69,8 +69,8 @@ CREATE SEQUENCE IF NOT EXISTS order_number_seq START 1;
 CREATE TABLE IF NOT EXISTS public.orders (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_number INTEGER DEFAULT nextval('order_number_seq'),
-  seller_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-  seller_name TEXT DEFAULT '',
+  salesperson_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  salesperson_name TEXT DEFAULT '',
   cashier_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   customer_name TEXT DEFAULT '',
   customer_phone TEXT DEFAULT '',
@@ -93,13 +93,9 @@ DO $$ BEGIN
   ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'unpaid';
   ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS sent_to_cashier_at TIMESTAMPTZ;
   ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
-  -- Map old column names if they exist
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='salesperson_id' AND table_schema='public') THEN
-    ALTER TABLE public.orders RENAME COLUMN salesperson_id TO seller_id;
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='orders' AND column_name='salesperson_name' AND table_schema='public') THEN
-    ALTER TABLE public.orders RENAME COLUMN salesperson_name TO seller_name;
-  END IF;
+  -- Keep the current app contract (salesperson_* fields)
+  ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS salesperson_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+  ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS salesperson_name TEXT DEFAULT '';
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
@@ -147,7 +143,7 @@ CREATE TABLE IF NOT EXISTS public.shortages (
   product_name TEXT NOT NULL,
   product_code TEXT,
   notes TEXT,
-  reported_by_id UUID,
+  reported_by_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   reported_by_name TEXT,
   is_resolved BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
@@ -156,6 +152,11 @@ CREATE TABLE IF NOT EXISTS public.shortages (
 DO $$ BEGIN
   ALTER TABLE public.shortages ADD COLUMN IF NOT EXISTS product_code TEXT;
   ALTER TABLE public.shortages ADD COLUMN IF NOT EXISTS reported_by_id UUID;
+  ALTER TABLE public.shortages
+    DROP CONSTRAINT IF EXISTS shortages_reported_by_id_fkey;
+  ALTER TABLE public.shortages
+    ADD CONSTRAINT shortages_reported_by_id_fkey
+    FOREIGN KEY (reported_by_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
@@ -167,9 +168,39 @@ CREATE TABLE IF NOT EXISTS public.shifts (
   end_time TIMESTAMPTZ,
   starting_cash NUMERIC DEFAULT 0,
   ending_cash NUMERIC DEFAULT 0,
-  status TEXT DEFAULT 'active',
+  status TEXT DEFAULT 'open',
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE public.shifts
+  DROP CONSTRAINT IF EXISTS shifts_status_check;
+
+ALTER TABLE public.shifts
+  ADD CONSTRAINT shifts_status_check
+  CHECK (status IN ('open', 'closed'));
+
+ALTER TABLE public.orders
+  DROP CONSTRAINT IF EXISTS orders_status_check;
+
+ALTER TABLE public.orders
+  ADD CONSTRAINT orders_status_check
+  CHECK (status IN ('draft', 'sent_to_cashier', 'under_review', 'confirmed', 'cancelled'));
+
+ALTER TABLE public.orders
+  DROP CONSTRAINT IF EXISTS orders_payment_status_check;
+
+ALTER TABLE public.orders
+  ADD CONSTRAINT orders_payment_status_check
+  CHECK (payment_status IN ('unpaid', 'paid', 'partial'));
+
+CREATE INDEX IF NOT EXISTS idx_orders_salesperson_id ON public.orders(salesperson_id);
+CREATE INDEX IF NOT EXISTS idx_orders_cashier_id ON public.orders(cashier_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_products_is_deleted ON public.products(is_deleted);
+CREATE INDEX IF NOT EXISTS idx_products_code ON public.products(code);
+CREATE INDEX IF NOT EXISTS idx_shortages_reported_by_id ON public.shortages(reported_by_id);
+CREATE INDEX IF NOT EXISTS idx_shifts_user_id ON public.shifts(user_id);
 
 -- =============================================
 -- AUTO-CREATE PROFILE TRIGGER
@@ -234,7 +265,7 @@ END $$;
 CREATE POLICY "orders_select" ON public.orders FOR SELECT USING (auth.uid() IS NOT NULL);
 CREATE POLICY "orders_insert" ON public.orders FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "orders_update" ON public.orders FOR UPDATE USING (
-  public.get_user_role() = 'admin' OR public.get_user_role() = 'cashier' OR seller_id = auth.uid()
+  public.get_user_role() = 'admin' OR public.get_user_role() = 'cashier' OR salesperson_id = auth.uid()
 );
 
 -- ORDER ITEMS
@@ -304,10 +335,10 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 -- =============================================
--- PROMOTE ADMIN (update this email to yours)
+-- PROMOTE ADMIN (update this to your admin user UUID)
 -- =============================================
-UPDATE public.profiles
-SET role = 'admin', is_approved = true, is_active = true
-WHERE email = 'sayed@carpetland.com';
+-- UPDATE public.profiles
+-- SET role = 'admin', is_approved = true, is_active = true
+-- WHERE id = 'YOUR-ADMIN-USER-UUID-HERE';
 
 -- Done! Your database is ready.

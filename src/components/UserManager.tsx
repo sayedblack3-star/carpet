@@ -23,6 +23,31 @@ const EMPTY_FORM: Partial<Profile> = {
   is_active: true,
 };
 
+type AdminCreateUserPayload = {
+  email: string;
+  password: string;
+  full_name: string;
+  role: UserRole;
+  branch_id: string | null;
+};
+
+type AdminDeleteUserPayload = {
+  user_id: string;
+};
+
+type AdminUsersApiPayload = AdminCreateUserPayload | AdminDeleteUserPayload;
+
+type ProfileMutationPayload = {
+  role: UserRole;
+  full_name: string;
+  employee_code?: string | null;
+  is_approved: boolean;
+  is_active: boolean;
+  branch_id?: string | null;
+};
+
+const getErrorMessage = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
+
 const getFreshAdminAccessToken = async () => {
   const session = await getSafeSession();
 
@@ -43,7 +68,7 @@ const refreshAdminAccessToken = async () => {
   return data.session.access_token;
 };
 
-const callAdminUsersApi = async (method: 'POST' | 'DELETE', payload: Record<string, any>) => {
+const callAdminUsersApi = async (method: 'POST' | 'DELETE', payload: AdminUsersApiPayload) => {
   const executeRequest = async (accessToken: string) =>
     fetch(getApiUrl('/api/admin/users'), {
       method,
@@ -130,14 +155,22 @@ const UserManager: React.FC = () => {
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-    if (data) setUsers(data as Profile[]);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      setUsers((data || []) as Profile[]);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+      toast.error('تعذر تحميل المستخدمين الآن.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fetchBranches = async () => {
     const { data, error } = await supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name');
     if (error) {
+      console.warn('Failed to fetch branches for user manager:', error);
       setBranchFeatureEnabled(false);
       setBranches([]);
       return;
@@ -200,7 +233,7 @@ const UserManager: React.FC = () => {
       if (error) throw error;
       if (!data.user) throw new Error('فشل في إنشاء المستخدم');
 
-      const payload: Record<string, any> = {
+      const payload: ProfileMutationPayload = {
         role: newRole,
         is_approved: false,
         is_active: true,
@@ -241,11 +274,12 @@ const UserManager: React.FC = () => {
       setNewRole('seller');
       setNewBranchId('');
       fetchUsers();
-    } catch (err: any) {
-      if (err.message?.includes('already registered') || err.message?.includes('already exists')) {
+    } catch (error: unknown) {
+      const message = getErrorMessage(error, 'تعذر إنشاء الحساب الجديد.');
+      if (message.includes('already registered') || message.includes('already exists')) {
         toast.error('هذا البريد الإلكتروني مسجل بالفعل');
       } else {
-        toast.error(`خطأ: ${err.message}`);
+        toast.error(`خطأ: ${message}`);
       }
     } finally {
       setCreating(false);
@@ -257,12 +291,12 @@ const UserManager: React.FC = () => {
     if (!isEditing || !editingId) return;
 
     try {
-      const payload: Record<string, any> = {
-        role: formData.role,
+      const payload: ProfileMutationPayload = {
+        role: formData.role || 'seller',
         full_name: normalizeText(formData.full_name || ''),
         employee_code: normalizeText(formData.employee_code || '') || null,
-        is_approved: formData.is_approved,
-        is_active: formData.is_active,
+        is_approved: formData.is_approved ?? false,
+        is_active: formData.is_active ?? true,
       };
 
       if (branchFeatureEnabled) {
@@ -283,8 +317,8 @@ const UserManager: React.FC = () => {
       toast.success('تم تحديث بيانات المستخدم');
       resetForm();
       fetchUsers();
-    } catch (err: any) {
-      toast.error(`خطأ: ${err.message}`);
+    } catch (error: unknown) {
+      toast.error(`خطأ: ${getErrorMessage(error, 'تعذر تحديث بيانات المستخدم الآن.')}`);
     }
   };
 

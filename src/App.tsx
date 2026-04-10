@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
 import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff } from 'lucide-react';
@@ -16,6 +17,7 @@ import Login from './components/Login';
 import BrandMark from './components/BrandMark';
 import LandingPage from './components/LandingPage';
 import { getRuntimePlatform } from './lib/runtimePlatform';
+import { appClient } from './config/appClient';
 
 const TABS = [
   { id: 'dashboard', label: 'لوحة التحكم', icon: BarChart3, roles: ['admin'] as UserRole[] },
@@ -123,7 +125,7 @@ const App: React.FC = () => {
     return <SetupErrorScreen />;
   }
 
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchFeatureEnabled, setBranchFeatureEnabled] = useState(false);
@@ -139,17 +141,7 @@ const App: React.FC = () => {
   const role = profile?.role || 'seller';
   const allowedTabs = useMemo(() => TABS.filter((tab) => tab.roles.includes(role as UserRole)), [role]);
   const currentBranch = useMemo(() => branches.find((branch) => branch.id === profile?.branch_id) || null, [branches, profile?.branch_id]);
-  const isAdminEmail = (email?: string | null) => email === 'admin@carpetland.com' || email === 'sayed@carpetland.com';
-  const buildFallbackProfile = (userId: string, email: string): Profile => ({
-    id: userId,
-    email,
-    full_name: isAdminEmail(email) ? 'المدير العام' : 'مستخدم النظام',
-    role: isAdminEmail(email) ? 'admin' : 'seller',
-    branch_id: null,
-    is_approved: true,
-    is_active: true,
-    created_at: new Date().toISOString(),
-  });
+  const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Unknown error');
 
   useEffect(() => {
     profileRef.current = profile;
@@ -258,9 +250,7 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchProfile = async (user: { id: string; email?: string | null }) => {
-    const email = user.email || '';
-    const adminUser = isAdminEmail(email);
+  const fetchProfile = async (user: Pick<User, 'id' | 'email'>) => {
     const currentProfile = profileRef.current;
     const cachedProfile = currentProfile?.id === user.id ? currentProfile : readCachedProfile(user.id);
 
@@ -276,36 +266,13 @@ const App: React.FC = () => {
       }
 
       if (!data) {
-        if (adminUser) {
-          const { data: newProfile, error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: user.id,
-              email,
-              role: 'admin',
-              full_name: 'المدير العام',
-              is_approved: true,
-              is_active: true,
-            })
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-          if (newProfile) setProfile(newProfile as Profile);
-          return;
-        }
-
         throw new Error('لم يتم العثور على ملف المستخدم. يجب أن يقوم المدير بإنشاء الحساب أو تفعيله أولًا.');
       }
 
       setProfile(data as Profile);
-    } catch (err: any) {
-      const isProfileTimeout = err instanceof Error && err.message === PROFILE_LOAD_TIMEOUT_MESSAGE;
-
-      if (adminUser) {
-        setProfile(buildFallbackProfile(user.id, email));
-        return;
-      }
+    } catch (error: unknown) {
+      const message = getErrorMessage(error);
+      const isProfileTimeout = message === PROFILE_LOAD_TIMEOUT_MESSAGE;
 
       if (isProfileTimeout && cachedProfile && cachedProfile.id === user.id) {
         setProfile(cachedProfile);
@@ -313,11 +280,11 @@ const App: React.FC = () => {
       }
 
       if (!isProfileTimeout) {
-        console.error('Error fetching profile:', err);
+        console.error('Error fetching profile:', error);
       }
 
       clearCachedProfile(user.id);
-      toast.error(`خطأ في تحميل بيانات الملف الشخصي: ${err.message || 'Error'}`);
+      toast.error(`خطأ في تحميل بيانات الملف الشخصي: ${message}`);
       setProfile(null);
     } finally {
       setLoading(false);
@@ -444,7 +411,7 @@ const App: React.FC = () => {
 
       <aside className="hidden sm:flex flex-col w-72 bg-gradient-to-b from-slate-900 to-slate-950 text-white shadow-2xl z-50">
         <div className="p-8 border-b border-white/5 bg-white/5">
-          <BrandMark title="Carpet Land" subtitle="CARPETS • HOME TEXTILES" />
+          <BrandMark title={appClient.companyNameEn} subtitle={appClient.tagline} />
         </div>
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           {allowedTabs.map((tab) => (
@@ -494,7 +461,7 @@ const App: React.FC = () => {
               <Menu className="w-6 h-6" />
             </button>
             <BrandMark iconOnly className="gap-0" />
-            <h1 className="text-lg font-black tracking-tight">كاربت لاند</h1>
+            <h1 className="text-lg font-black tracking-tight">{appClient.companyNameAr}</h1>
           </div>
           <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center font-black text-xs">{profile.full_name?.[0]}</div>
         </header>

@@ -1,0 +1,17 @@
+{
+  "companyNameAr": "كاربت لاند",
+  "companyNameEn": "Carpet Land",
+  "systemName": "Carpet Land ERP",
+  "tagline": "CARPETS AND HOME TEXTILES",
+  "webBadgeLabel": "CARPET LAND CONTROL CENTER",
+  "desktopSubtitle": "DESKTOP OPERATIONS",
+  "mobileSubtitle": "MOBILE OPERATIONS",
+  "versionLabel": "Carpet Land ERP v5.0",
+  "author": "Carpet Land",
+  "webTitle": "Carpet Land | كاربت لاند",
+  "metaDescription": "Carpet Land ERP for sales, cashier, inventory, and branch operations.",
+  "mobileAppName": "Carpet Land",
+  "mobileAppId": "com.carpetland.erp",
+  "desktopProductName": "Carpet Land ERP",
+  "desktopAppId": "com.carpetland.erp.desktop"
+}

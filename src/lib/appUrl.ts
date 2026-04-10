@@ -1,6 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-
-const FALLBACK_APP_URL = 'https://carpet-rbnd.vercel.app';
+import { appClient } from '../config/appClient';
 
 const normalizeBaseUrl = (value: string) => value.trim().replace(/\/+$/, '');
 
@@ -21,7 +20,11 @@ export const getAppBaseUrl = () => {
     }
   }
 
-  return FALLBACK_APP_URL;
+  if (appClient.webAppUrl) {
+    return normalizeBaseUrl(appClient.webAppUrl);
+  }
+
+  return 'http://localhost';
 };
 
 export const getApiUrl = (path: string) => {

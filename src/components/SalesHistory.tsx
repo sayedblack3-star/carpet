@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import { Order } from '../types';
 import { History, Search, DollarSign, CheckCircle, Clock, XCircle, Building2 } from 'lucide-react';
 import { format, subDays, startOfDay } from 'date-fns';
+import { toast } from 'sonner';
 
 interface SalesHistoryProps {
   branchId?: string | null;
@@ -19,19 +20,26 @@ export default function SalesHistory({ branchId, branchEnabled = false, isAdmin 
 
   const fetchOrders = async () => {
     setLoading(true);
-    let query = supabase.from('orders').select('*');
-    const now = new Date();
+    try {
+      let query = supabase.from('orders').select('*');
+      const now = new Date();
 
-    if (dateRange === 'today') query = query.gte('created_at', startOfDay(now).toISOString());
-    else if (dateRange === 'week') query = query.gte('created_at', subDays(now, 7).toISOString());
-    else if (dateRange === 'month') query = query.gte('created_at', subDays(now, 30).toISOString());
+      if (dateRange === 'today') query = query.gte('created_at', startOfDay(now).toISOString());
+      else if (dateRange === 'week') query = query.gte('created_at', subDays(now, 7).toISOString());
+      else if (dateRange === 'month') query = query.gte('created_at', subDays(now, 30).toISOString());
 
-    if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-    if (branchEnabled && !isAdmin && branchId) query = query.eq('branch_id', branchId);
+      if (statusFilter !== 'all') query = query.eq('status', statusFilter);
+      if (branchEnabled && !isAdmin && branchId) query = query.eq('branch_id', branchId);
 
-    const { data } = await query.order('created_at', { ascending: false });
-    if (data) setOrders(data as Order[]);
-    setLoading(false);
+      const { data, error } = await query.order('created_at', { ascending: false });
+      if (error) throw error;
+      setOrders((data || []) as Order[]);
+    } catch (error) {
+      console.error('Failed to fetch sales history:', error);
+      toast.error('تعذر تحميل سجل المبيعات الآن.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
