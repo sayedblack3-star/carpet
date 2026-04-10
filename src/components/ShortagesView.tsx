@@ -207,7 +207,7 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
             {loading
               ? <LoadingCardGrid count={3} minHeightClassName="h-48" className="contents" />
               : filtered.map((shortage) => (
-                  <div key={shortage.id} className={`bg-white p-6 rounded-2xl border transition-all ${shortage.is_resolved ? 'opacity-60 grayscale' : 'shadow-sm hover:shadow-xl'}`}>
+                  <div key={shortage.id} className={`motion-fade-up motion-soft-lift bg-white p-6 rounded-2xl border transition-all ${shortage.is_resolved ? 'opacity-60 grayscale' : 'shadow-sm hover:shadow-xl'}`}>
                     <div className="flex justify-between items-start mb-4 gap-3">
                       <div>
                         <h4 className={`text-lg font-black text-slate-800 ${shortage.is_resolved ? 'line-through' : ''}`}>{shortage.product_name}</h4>

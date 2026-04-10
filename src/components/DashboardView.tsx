@@ -104,7 +104,7 @@ type StatTileProps = {
 };
 
 const StatTile = ({ icon: Icon, title, value, caption, tone, trend }: StatTileProps) => (
-  <div className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-26px_rgba(15,23,42,0.35)]">
+  <div className="motion-fade-up motion-soft-lift motion-glow relative overflow-hidden rounded-[2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-26px_rgba(15,23,42,0.35)]">
     <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
     <div className="flex items-start justify-between gap-4">
       <div className={`flex h-14 w-14 items-center justify-center rounded-[1.4rem] border ${toneStyles[tone]}`}>
@@ -126,7 +126,7 @@ const StatTile = ({ icon: Icon, title, value, caption, tone, trend }: StatTilePr
 );
 
 const SectionCard = ({ title, subtitle, icon: Icon, children }: { title: string; subtitle?: string; icon: React.ElementType; children: React.ReactNode }) => (
-  <section className="rounded-[2.2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)] sm:p-7">
+  <section className="motion-fade-up motion-fade-up-delay-1 rounded-[2.2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)] sm:p-7">
     <div className="mb-6 flex items-start justify-between gap-4">
       <div>
         <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">
@@ -603,7 +603,7 @@ const DashboardView: React.FC = () => {
 
                 <button
                   onClick={() => void fetchData(true)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-white/80 transition hover:bg-white/10"
+                  className="motion-button inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-black text-white/80 transition hover:bg-white/10"
                 >
                   <RotateCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                   تحديث الآن

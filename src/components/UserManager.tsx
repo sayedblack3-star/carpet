@@ -563,8 +563,8 @@ const UserManager: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {loading
               ? <LoadingCardGrid count={4} minHeightClassName="h-48" className="contents" />
-              : filtered.map((user) => (
-                  <div key={user.id} className="bg-white rounded-2xl p-5 sm:p-6 border shadow-sm hover:shadow-lg transition-all relative overflow-hidden">
+                : filtered.map((user) => (
+                    <div key={user.id} className="motion-fade-up motion-soft-lift motion-glow bg-white rounded-2xl p-5 sm:p-6 border shadow-sm hover:shadow-lg transition-all relative overflow-hidden">
                     <div className={`absolute top-0 inset-x-0 h-1 ${user.is_approved ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></div>
                     <div className="flex items-start justify-between gap-3 mb-4">
                       <div className="flex items-center gap-3 min-w-0">

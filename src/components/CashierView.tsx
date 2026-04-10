@@ -567,7 +567,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                   onClick={() => {
                     void selectOrder(order);
                   }}
-                  className={`group relative w-full overflow-hidden rounded-[1.8rem] border p-5 text-right transition-all duration-200 ${
+                  className={`motion-fade-up motion-soft-lift motion-glow group relative w-full overflow-hidden rounded-[1.8rem] border p-5 text-right transition-all duration-200 ${
                     isSelected
                       ? 'border-slate-900 bg-[#120b07] text-white shadow-[0_24px_50px_-28px_rgba(15,23,42,0.7)]'
                       : 'border-white/80 bg-white/95 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.32)] hover:-translate-y-0.5 hover:border-amber-100 hover:shadow-[0_26px_50px_-30px_rgba(245,158,11,0.3)]'

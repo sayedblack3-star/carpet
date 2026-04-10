@@ -265,8 +265,8 @@ export default function ProductManager() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {loading
           ? <LoadingCardGrid count={4} minHeightClassName="h-56" className="contents" />
-          : filtered.map((product) => (
-              <div key={product.id} className="bg-white p-5 rounded-2xl border shadow-sm hover:shadow-lg transition-all group">
+            : filtered.map((product) => (
+                <div key={product.id} className="motion-fade-up motion-soft-lift motion-glow bg-white p-5 rounded-2xl border shadow-sm hover:shadow-lg transition-all group">
                 <div className="flex justify-between items-start mb-3">
                   <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-3 py-1 rounded-full">{product.code}</span>
                   <span

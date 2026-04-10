@@ -489,7 +489,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                   key={product.id}
                   type="button"
                   onClick={() => addToCart(product)}
-                  className="group flex min-h-[14.5rem] flex-col overflow-hidden rounded-[1.85rem] border border-white/80 bg-white p-5 text-right shadow-[0_18px_45px_-32px_rgba(15,23,42,0.28)] transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_24px_55px_-34px_rgba(59,130,246,0.28)]"
+                  className="motion-fade-up motion-soft-lift motion-glow group flex min-h-[14.5rem] flex-col overflow-hidden rounded-[1.85rem] border border-white/80 bg-white p-5 text-right shadow-[0_18px_45px_-32px_rgba(15,23,42,0.28)] transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_24px_55px_-34px_rgba(59,130,246,0.28)]"
                 >
                   <div className="mb-3 flex items-start justify-between">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-black uppercase text-slate-500">{product.code}</span>
@@ -706,7 +706,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             </div>
 
             {myOrders.map((order) => (
-              <div key={order.id} className="flex flex-col gap-5 rounded-2xl border bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between sm:p-6">
+              <div key={order.id} className="motion-fade-up motion-soft-lift flex flex-col gap-5 rounded-2xl border bg-white p-5 shadow-sm md:flex-row md:items-center md:justify-between sm:p-6">
                 <div className="flex items-center gap-4">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${order.status === 'confirmed' ? 'bg-emerald-100 text-emerald-600' : order.status === 'under_review' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-600'}`}>
                     {order.status === 'confirmed' ? <CheckCircle2 className="h-6 w-6" /> : <Clock className="h-6 w-6" />}
