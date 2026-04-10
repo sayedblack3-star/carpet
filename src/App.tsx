@@ -14,6 +14,8 @@ import ShortagesView from './components/ShortagesView';
 import SalesHistory from './components/SalesHistory';
 import Login from './components/Login';
 import BrandMark from './components/BrandMark';
+import LandingPage from './components/LandingPage';
+import { getRuntimePlatform } from './lib/runtimePlatform';
 
 const TABS = [
   { id: 'dashboard', label: 'لوحة التحكم', icon: BarChart3, roles: ['admin'] as UserRole[] },
@@ -29,6 +31,7 @@ const TABS = [
 const PROFILE_LOAD_TIMEOUT_MS = 10000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
 const PROFILE_CACHE_KEY = 'carpet-land-profile-cache-v1';
+const LOGIN_ROUTE = '/login';
 
 const readCachedProfile = (userId: string): Profile | null => {
   if (typeof window === 'undefined') return null;
@@ -128,8 +131,10 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const [publicPath, setPublicPath] = useState(() => (typeof window === 'undefined' ? '/' : window.location.pathname || '/'));
   const profileRef = useRef<Profile | null>(null);
   const networkStateRef = useRef(isOnline);
+  const runtimePlatform = useMemo(() => getRuntimePlatform(), []);
 
   const role = profile?.role || 'seller';
   const allowedTabs = useMemo(() => TABS.filter((tab) => tab.roles.includes(role as UserRole)), [role]);
@@ -178,6 +183,15 @@ const App: React.FC = () => {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || runtimePlatform !== 'web') return;
+
+    const syncPath = () => setPublicPath(window.location.pathname || '/');
+    window.addEventListener('popstate', syncPath);
+
+    return () => window.removeEventListener('popstate', syncPath);
+  }, [runtimePlatform]);
 
   useEffect(() => {
     let isMounted = true;
@@ -314,7 +328,17 @@ const App: React.FC = () => {
     await supabase.auth.signOut();
     clearCachedProfile(session?.user?.id || profile?.id);
     setProfile(null);
+    if (runtimePlatform === 'web' && typeof window !== 'undefined') {
+      window.history.replaceState({}, '', LOGIN_ROUTE);
+      setPublicPath(LOGIN_ROUTE);
+    }
     toast.success('تم تسجيل الخروج بنجاح');
+  };
+
+  const navigatePublic = (path: string) => {
+    if (typeof window === 'undefined') return;
+    window.history.pushState({}, '', path);
+    setPublicPath(path);
   };
 
   if (loading) {
@@ -328,7 +352,13 @@ const App: React.FC = () => {
     );
   }
 
-  if (!session) return <Login />;
+  if (!session) {
+    if (runtimePlatform === 'web' && publicPath !== LOGIN_ROUTE) {
+      return <LandingPage onLogin={() => navigatePublic(LOGIN_ROUTE)} />;
+    }
+
+    return <Login />;
+  }
 
   if (!profile) {
     return (
