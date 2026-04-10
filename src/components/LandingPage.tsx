@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, BarChart3, MonitorSmartphone, ShieldCheck, ShoppingCart, Store, Users } from 'lucide-react';
 import BrandMark from './BrandMark';
+import { appClient } from '../config/appClient';
 
 interface LandingPageProps {
   onLogin: () => void;
@@ -56,7 +57,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
 
       <div className="relative z-10 mx-auto flex min-safe-screen w-full max-w-[1440px] flex-col px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
         <header className="flex items-center justify-between rounded-[2rem] border border-white/10 bg-white/[0.05] px-4 py-4 backdrop-blur-2xl sm:px-6">
-          <BrandMark title="Carpet Land" subtitle="CARPETS • HOME TEXTILES" />
+          <BrandMark title={appClient.companyNameEn} subtitle={appClient.tagline} />
           <button
             onClick={onLogin}
             className="inline-flex items-center gap-2 rounded-full bg-amber-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-400"
@@ -71,12 +72,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLogin }) => {
             <div className="rounded-[2.75rem] border border-white/10 bg-white/[0.04] p-6 shadow-[0_40px_120px_-40px_rgba(0,0,0,0.8)] backdrop-blur-3xl sm:p-8 lg:p-10">
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-xs font-black tracking-[0.18em] text-amber-100">
                 <ShieldCheck className="h-4 w-4 text-amber-300" />
-                CARPET LAND ERP
+                {appClient.systemName.toUpperCase()}
               </div>
 
               <h1 className="mt-6 text-4xl font-black leading-[1.2] text-white sm:text-5xl lg:text-6xl">
                 نظام موحد لإدارة البيع والتشغيل والتحصيل داخل فروع
-                <span className="text-amber-300"> كاربت لاند</span>
+                <span className="text-amber-300"> {appClient.companyNameAr}</span>
               </h1>
               <p className="mt-6 max-w-2xl text-base font-bold leading-8 text-white/72 sm:text-lg">
                 سيستم واحد يجمع الإدارة، البائع، والكاشير على نفس قاعدة البيانات ونفس الصلاحيات، مع

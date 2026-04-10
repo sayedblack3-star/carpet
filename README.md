@@ -25,6 +25,15 @@ View your app in AI Studio: https://ai.studio/apps/89006244-0f82-4ef5-bfec-30160
 6. Run the app:
    `npm run dev`
 
+## Reuse For New Clients
+
+- Edit `client.config.json`
+- Run `npm run client:apply`
+- Point the new client copy to its own Supabase project and hosting
+
+Full handoff guide:
+`CLIENT_TEMPLATE_SETUP.md`
+
 ## Android APK
 
 The web app stays exactly as-is. The Android app is an additional wrapper around the same React UI and the same Supabase database.
