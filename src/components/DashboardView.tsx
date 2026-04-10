@@ -170,9 +170,15 @@ const DashboardView: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const isFetchingRef = useRef(false);
+  const pollTimeoutRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
   const [chartSize, setChartSize] = useState({ width: 0, height: 320 });
 
   const fetchData = async (isManualRefresh = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+
     if (isManualRefresh) {
       setRefreshing(true);
     } else {
@@ -192,18 +198,21 @@ const DashboardView: React.FC = () => {
       ordersQuery = ordersQuery.gte('created_at', subDays(now, 30).toISOString());
     }
 
-    const [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult] = await Promise.allSettled([
+    try {
+      const [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult] = await Promise.allSettled([
       queryWithRetry(() => Promise.resolve(ordersQuery.order('created_at', { ascending: false }))),
       queryWithRetry(() => Promise.resolve(supabase.from('products').select('*').eq('is_deleted', false))),
       queryWithRetry(() => Promise.resolve(supabase.from('profiles').select('*'))),
       queryWithRetry(() => Promise.resolve(supabase.from('order_items').select('*'))),
       queryWithRetry(() => Promise.resolve(supabase.from('shifts').select('*').order('start_time', { ascending: false }).limit(50))),
       queryWithRetry(() => Promise.resolve(supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name'))),
-    ]);
+      ]);
 
-    const failedResults = [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult].filter(
+      if (!mountedRef.current) return;
+
+      const failedResults = [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult].filter(
       (result) => result.status === 'rejected',
-    );
+      );
 
     if (failedResults.length > 0) {
       setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. البيانات المعروضة قد تكون أقدم قليلًا وسيتم التحديث تلقائيًا.');
@@ -245,38 +254,59 @@ const DashboardView: React.FC = () => {
       setBranches([]);
     }
 
-    setLastUpdated(format(new Date(), 'HH:mm'));
-    setRefreshing(false);
-    setLoading(false);
+      setLastUpdated(format(new Date(), 'HH:mm'));
+    } finally {
+      if (mountedRef.current) {
+        setRefreshing(false);
+        setLoading(false);
+      }
+      isFetchingRef.current = false;
+    }
   };
 
   useEffect(() => {
     const refreshIfAvailable = (manual = false) => {
-      if (!canRefreshDashboard()) return;
+      if (!canRefreshDashboard() || isFetchingRef.current) return;
       void fetchData(manual);
     };
 
-    refreshIfAvailable();
+    const clearPoll = () => {
+      if (pollTimeoutRef.current) {
+        window.clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+    };
 
-    const intervalId = window.setInterval(() => {
-      refreshIfAvailable();
-    }, DASHBOARD_POLL_INTERVAL_MS);
+    const scheduleNextPoll = () => {
+      clearPoll();
+      pollTimeoutRef.current = window.setTimeout(() => {
+        refreshIfAvailable();
+        scheduleNextPoll();
+      }, DASHBOARD_POLL_INTERVAL_MS);
+    };
+
+    mountedRef.current = true;
+    refreshIfAvailable();
+    scheduleNextPoll();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         refreshIfAvailable();
+        scheduleNextPoll();
       }
     };
 
     const handleOnline = () => {
       refreshIfAvailable();
+      scheduleNextPoll();
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('online', handleOnline);
 
     return () => {
-      window.clearInterval(intervalId);
+      mountedRef.current = false;
+      clearPoll();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('online', handleOnline);
     };
