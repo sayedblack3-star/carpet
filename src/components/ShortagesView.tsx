@@ -5,6 +5,7 @@ import { ClipboardList, Plus, CheckCircle, Clock, Search, Copy, Building2 } from
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
+import { LoadingCardGrid } from './ui/LoadingState';
 
 interface ShortagesViewProps {
   userName: string;
@@ -204,7 +205,7 @@ export default function ShortagesView({ userName, branchId, branchName, branchEn
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {loading
-              ? [1, 2, 3].map((i) => <div key={i} className="h-48 bg-slate-100 animate-pulse rounded-2xl" />)
+              ? <LoadingCardGrid count={3} minHeightClassName="h-48" className="contents" />
               : filtered.map((shortage) => (
                   <div key={shortage.id} className={`bg-white p-6 rounded-2xl border transition-all ${shortage.is_resolved ? 'opacity-60 grayscale' : 'shadow-sm hover:shadow-xl'}`}>
                     <div className="flex justify-between items-start mb-4 gap-3">

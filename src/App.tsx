@@ -16,6 +16,7 @@ import SalesHistory from './components/SalesHistory';
 import Login from './components/Login';
 import BrandMark from './components/BrandMark';
 import LandingPage from './components/LandingPage';
+import { LoadingState } from './components/ui/LoadingState';
 import { getRuntimePlatform } from './lib/runtimePlatform';
 import { appClient } from './config/appClient';
 
@@ -310,11 +311,12 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600 font-bold">جاري تحميل النظام...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <LoadingState
+          title="جاري تجهيز النظام"
+          subtitle="نحمّل الجلسة الحالية وبيانات التشغيل الأساسية قبل فتح الواجهة."
+          className="w-full max-w-lg"
+        />
       </div>
     );
   }

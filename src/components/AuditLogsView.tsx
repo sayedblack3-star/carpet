@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { ChevronLeft, ChevronRight, Search, ShieldAlert, User, Clock } from 'lucide-react';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import { toast } from 'sonner';
+import { LoadingState } from './ui/LoadingState';
 
 interface Log {
   id: string;
@@ -120,10 +121,18 @@ export default function AuditLogsView() {
                 <th className="p-6">التفاصيل</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan={4} className="p-12 text-center text-slate-400">جاري تحميل السجلات...</td></tr>
-              ) : filteredLogs.length === 0 ? (
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} className="p-6">
+                      <LoadingState
+                        title="جاري تحميل سجل العمليات"
+                        subtitle="نسترجع أحدث الأحداث الحساسة وعمليات النظام لعرضها بشكل مرتب."
+                        compact
+                      />
+                    </td>
+                  </tr>
+                ) : filteredLogs.length === 0 ? (
                 <tr><td colSpan={4} className="p-12 text-center text-slate-400">لا توجد سجلات حالياً</td></tr>
               ) : (
                 filteredLogs.map(log => (

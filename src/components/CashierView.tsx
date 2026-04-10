@@ -30,6 +30,7 @@ import { logAction } from '../lib/logger';
 import { toFriendlyErrorMessage } from '../lib/errorMessages';
 import ShiftManager from './ShiftManager';
 import { appClient } from '../config/appClient';
+import { LoadingState } from './ui/LoadingState';
 
 type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
 
@@ -547,11 +548,15 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
           </div>
         </div>
 
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {loading ? (
-            <div className="py-10 text-center font-bold text-slate-400">جاري تحميل طلبات الكاشير...</div>
-          ) : (
-            filteredOrders.map((order) => {
+          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+            {loading ? (
+              <LoadingState
+                title="جاري تحميل طلبات الكاشير"
+                subtitle="نجهّز الطلبات الحالية والعناصر المرتبطة بها قبل بدء المراجعة."
+                compact
+              />
+            ) : (
+              filteredOrders.map((order) => {
               const sellerCode = sellerMeta[order.salesperson_id]?.employee_code;
               const isSelected = selectedOrder?.id === order.id;
 

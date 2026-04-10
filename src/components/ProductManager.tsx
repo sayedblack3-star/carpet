@@ -6,6 +6,7 @@ import { Package, Plus, Edit2, Trash2, Search, X, Save, Upload } from 'lucide-re
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 import { normalizeText, validateProductPayload } from '../lib/security';
+import { LoadingCardGrid } from './ui/LoadingState';
 
 export default function ProductManager() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -263,7 +264,7 @@ export default function ProductManager() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {loading
-          ? [1, 2, 3, 4].map((i) => <div key={i} className="h-56 bg-white animate-pulse rounded-2xl border" />)
+          ? <LoadingCardGrid count={4} minHeightClassName="h-56" className="contents" />
           : filtered.map((product) => (
               <div key={product.id} className="bg-white p-5 rounded-2xl border shadow-sm hover:shadow-lg transition-all group">
                 <div className="flex justify-between items-start mb-3">

@@ -7,6 +7,7 @@ import { logAction } from '../lib/logger';
 import { getApiUrl } from '../lib/appUrl';
 import { normalizeEmail, normalizeText, validateEmail, validateStrongPassword } from '../lib/security';
 import { toFriendlyErrorMessage } from '../lib/errorMessages';
+import { LoadingCardGrid } from './ui/LoadingState';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'مدير عام',
@@ -561,7 +562,7 @@ const UserManager: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {loading
-              ? [1, 2, 3, 4].map((i) => <div key={i} className="h-48 bg-white animate-pulse rounded-2xl border"></div>)
+              ? <LoadingCardGrid count={4} minHeightClassName="h-48" className="contents" />
               : filtered.map((user) => (
                   <div key={user.id} className="bg-white rounded-2xl p-5 sm:p-6 border shadow-sm hover:shadow-lg transition-all relative overflow-hidden">
                     <div className={`absolute top-0 inset-x-0 h-1 ${user.is_approved ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></div>

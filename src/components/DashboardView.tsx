@@ -21,6 +21,8 @@ import {
   Users,
 } from 'lucide-react';
 import { format, startOfDay, subDays } from 'date-fns';
+import { appClient } from '../config/appClient';
+import { LoadingCardGrid, LoadingState } from './ui/LoadingState';
 
 const QUERY_TIMEOUT_MS = 6000;
 const QUERY_RETRY_DELAY_MS = 700;
@@ -38,21 +40,6 @@ const DATE_RANGE_LABELS: Record<DateRange, string> = {
 
 const formatMoney = (value: number) => `${Math.round(value || 0).toLocaleString()} ج.م`;
 
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<T>((_, reject) => {
-        timeoutId = setTimeout(() => reject(new Error('timeout')), timeoutMs);
-      }),
-    ]);
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-};
-
 const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
 const isTransientNetworkError = (error: unknown) => {
@@ -66,9 +53,23 @@ const isTransientNetworkError = (error: unknown) => {
   );
 };
 
-const queryWithRetry = async <T,>(runQuery: () => Promise<T>, retries = 1): Promise<T> => {
+const runQueryWithTimeout = async <T,>(
+  runQuery: (signal: AbortSignal) => PromiseLike<T>,
+  timeoutMs: number,
+): Promise<T> => {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(new DOMException('timeout', 'AbortError')), timeoutMs);
+
   try {
-    return await withTimeout(runQuery(), QUERY_TIMEOUT_MS);
+    return await Promise.resolve(runQuery(controller.signal));
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+};
+
+const queryWithRetry = async <T,>(runQuery: (signal: AbortSignal) => PromiseLike<T>, retries = 1): Promise<T> => {
+  try {
+    return await runQueryWithTimeout(runQuery, QUERY_TIMEOUT_MS);
   } catch (error) {
     if (retries <= 0 || !isTransientNetworkError(error)) {
       throw error;
@@ -199,14 +200,16 @@ const DashboardView: React.FC = () => {
     }
 
     try {
-      const [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult] = await Promise.allSettled([
-      queryWithRetry(() => Promise.resolve(ordersQuery.order('created_at', { ascending: false }))),
-      queryWithRetry(() => Promise.resolve(supabase.from('products').select('*').eq('is_deleted', false))),
-      queryWithRetry(() => Promise.resolve(supabase.from('profiles').select('*'))),
-      queryWithRetry(() => Promise.resolve(supabase.from('order_items').select('*'))),
-      queryWithRetry(() => Promise.resolve(supabase.from('shifts').select('*').order('start_time', { ascending: false }).limit(50))),
-      queryWithRetry(() => Promise.resolve(supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name'))),
-      ]);
+      const dashboardRequests: Array<Promise<any>> = [
+        queryWithRetry((signal) => ordersQuery.abortSignal(signal).order('created_at', { ascending: false })),
+        queryWithRetry((signal) => supabase.from('products').select('*').eq('is_deleted', false).abortSignal(signal)),
+        queryWithRetry((signal) => supabase.from('profiles').select('*').abortSignal(signal)),
+        queryWithRetry((signal) => supabase.from('order_items').select('*').abortSignal(signal)),
+        queryWithRetry((signal) => supabase.from('shifts').select('*').order('start_time', { ascending: false }).limit(50).abortSignal(signal)),
+        queryWithRetry((signal) => supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name').abortSignal(signal)),
+      ];
+
+      const [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult] = await Promise.allSettled(dashboardRequests);
 
       if (!mountedRef.current) return;
 
@@ -564,7 +567,7 @@ const DashboardView: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3">
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-black tracking-[0.18em] text-amber-100">
                   <Sparkles className="h-4 w-4 text-amber-300" />
-                  CARPET LAND CONTROL CENTER
+                  {appClient.webBadgeLabel}
                 </span>
                 {lastUpdated ? (
                   <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs font-bold text-white/80">
@@ -636,12 +639,8 @@ const DashboardView: React.FC = () => {
         ) : null}
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-            {[1, 2, 3, 4].map((card) => (
-              <div key={card} className="h-40 animate-pulse rounded-[2rem] border border-slate-100 bg-white/70" />
-            ))}
-          </div>
-        ) : (
+            <LoadingCardGrid className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4" />
+          ) : (
           <>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
               <StatTile
@@ -751,15 +750,20 @@ const DashboardView: React.FC = () => {
                           border: '1px solid #e2e8f0',
                           boxShadow: '0 18px 40px rgba(15,23,42,0.12)',
                         }}
-                        formatter={(value: number) => [formatMoney(value), 'المبيعات']}
+                        formatter={(value) => [formatMoney(Number(value || 0)), 'المبيعات']}
                       />
                       <Bar dataKey="sales" fill="url(#salesGradient)" radius={[12, 12, 4, 4]} barSize={34} />
                     </BarChart>
-                  ) : (
-                    <div className="h-full animate-pulse rounded-[1.6rem] bg-slate-100" />
-                  )}
-                </div>
-              </SectionCard>
+                    ) : (
+                      <LoadingState
+                        title="جاري تجهيز الرسم"
+                        subtitle="نجمع مؤشرات المبيعات ونبني نظرة سريعة للأداء."
+                        compact
+                        className="h-full min-h-[18rem]"
+                      />
+                    )}
+                  </div>
+                </SectionCard>
 
               <SectionCard title="نبض التشغيل" subtitle="لقطات سريعة تساعدك تعرف أين تركز الآن." icon={ShieldCheck}>
                 <div className="space-y-4">
