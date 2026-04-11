@@ -28,31 +28,20 @@ import { logAction } from '../lib/logger';
 import { normalizeText, validateOrderInput } from '../lib/security';
 import { toFriendlyErrorMessage } from '../lib/errorMessages';
 import ShiftManager from './ShiftManager';
+import {
+  createSalespersonOrder,
+  fetchSalespersonOrders,
+  fetchSalespersonProducts,
+  type OrderInsertPayload,
+  type SellerProfileUpdatePayload,
+  updateSalespersonProfile,
+} from '../lib/salespersonService';
 
 interface SalespersonViewProps {
   branchId?: string | null;
   branchName?: string;
   branchEnabled?: boolean;
 }
-
-type SellerProfileUpdatePayload = {
-  full_name: string;
-  employee_code: string | null;
-};
-
-type OrderInsertPayload = {
-  salesperson_id: string;
-  salesperson_name: string;
-  customer_name: string;
-  customer_phone: string;
-  status: 'sent_to_cashier';
-  payment_status: 'unpaid';
-  total_original_price: number;
-  total_final_price: number;
-  notes: string;
-  sent_to_cashier_at: string;
-  branch_id?: string | null;
-};
 
 const moneyFormatter = new Intl.NumberFormat('ar-EG');
 
@@ -155,9 +144,8 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
-      if (error) throw error;
-      setProducts((data || []) as Product[]);
+      const productsData = await fetchSalespersonProducts();
+      setProducts(productsData);
     } catch (error) {
       console.error('Failed to fetch products for seller:', error);
       toast.error('تعذر تحميل المنتجات الآن.');
@@ -166,14 +154,12 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 
   const fetchMyOrders = async (userId: string, activeBranchId?: string) => {
     try {
-      let query = supabase.from('orders').select('*').eq('salesperson_id', userId);
-      if (branchEnabled && activeBranchId) {
-        query = query.eq('branch_id', activeBranchId);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false }).limit(20);
-      if (error) throw error;
-      setMyOrders((data || []) as Order[]);
+      const ordersData = await fetchSalespersonOrders(userId, {
+        branchEnabled,
+        branchId: activeBranchId,
+        limit: 20,
+      });
+      setMyOrders(ordersData);
       setRealtimeFallbackActive(false);
     } catch (error) {
       console.error('Failed to fetch seller orders:', error);
@@ -234,8 +220,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         employee_code: normalizeText(sellerForm.employee_code) || null,
       };
 
-      const { error } = await supabase.from('profiles').update(payload).eq('id', sessionUser.id);
-      if (error) throw error;
+      await updateSalespersonProfile(sessionUser.id, payload);
 
       setCurrentProfile((prev) =>
         prev
@@ -300,11 +285,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         orderPayload.branch_id = currentProfile?.branch_id || branchId;
       }
 
-      const { data: order, error } = await supabase.from('orders').insert(orderPayload).select().single();
-      if (error) throw error;
-
       const items = cart.map((item) => ({
-        order_id: order.id,
         product_id: item.id,
         product_name: item.name,
         quantity: item.cartQuantity,
@@ -313,8 +294,10 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         total_price: (item.price_sell_after || item.price_sell_before) * item.cartQuantity,
       }));
 
-      const { error: itemsError } = await supabase.from('order_items').insert(items);
-      if (itemsError) throw itemsError;
+      const order = await createSalespersonOrder(
+        orderPayload,
+        items,
+      );
 
       await logAction(
         'order_sent_to_cashier',
@@ -780,3 +763,4 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 };
 
 export default SalespersonView;
+

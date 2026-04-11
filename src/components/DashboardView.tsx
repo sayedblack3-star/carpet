@@ -1,11 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '../supabase';
 import { Branch, Order, OrderItem, Product, Profile, Shift } from '../types';
-import { BarChart, Bar, CartesianGrid, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   Activity,
   AlertCircle,
-  ArrowUpRight,
   Building2,
   CheckCircle2,
   Clock3,
@@ -16,20 +13,22 @@ import {
   ShoppingCart,
   Sparkles,
   Store,
-  TrendingUp,
   UserCheck,
   Users,
 } from 'lucide-react';
 import { format, startOfDay, subDays } from 'date-fns';
 import { appClient } from '../config/appClient';
-import { LoadingCardGrid, LoadingState } from './ui/LoadingState';
+import { LoadingCardGrid } from './ui/LoadingState';
+import { ReportMetric, SectionCard, StatTile, type StatTone } from './dashboard/DashboardUi';
+import { SalesChartCard } from './dashboard/SalesChartCard';
+import {
+  DASHBOARD_POLL_INTERVAL_MS,
+  canRefreshDashboard,
+  fetchDashboardSnapshot,
+  type DashboardDateRange,
+} from '../lib/dashboardService';
 
-const QUERY_TIMEOUT_MS = 6000;
-const QUERY_RETRY_DELAY_MS = 700;
-const DASHBOARD_POLL_INTERVAL_MS = 30000;
-
-type DateRange = 'today' | 'week' | 'month' | 'all';
-type StatTone = 'blue' | 'emerald' | 'amber' | 'slate' | 'rose';
+type DateRange = DashboardDateRange;
 
 const DATE_RANGE_LABELS: Record<DateRange, string> = {
   today: 'اليوم',
@@ -40,123 +39,6 @@ const DATE_RANGE_LABELS: Record<DateRange, string> = {
 
 const formatMoney = (value: number) => `${Math.round(value || 0).toLocaleString()} ج.م`;
 
-const delay = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
-
-const isTransientNetworkError = (error: unknown) => {
-  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  return (
-    message.includes('failed to fetch') ||
-    message.includes('networkerror') ||
-    message.includes('load failed') ||
-    message.includes('fetch') ||
-    message.includes('timeout')
-  );
-};
-
-const runQueryWithTimeout = async <T,>(
-  runQuery: (signal: AbortSignal) => PromiseLike<T>,
-  timeoutMs: number,
-): Promise<T> => {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(new DOMException('timeout', 'AbortError')), timeoutMs);
-
-  try {
-    return await Promise.resolve(runQuery(controller.signal));
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-};
-
-const queryWithRetry = async <T,>(runQuery: (signal: AbortSignal) => PromiseLike<T>, retries = 1): Promise<T> => {
-  try {
-    return await runQueryWithTimeout(runQuery, QUERY_TIMEOUT_MS);
-  } catch (error) {
-    if (retries <= 0 || !isTransientNetworkError(error)) {
-      throw error;
-    }
-
-    await delay(QUERY_RETRY_DELAY_MS);
-    return queryWithRetry(runQuery, retries - 1);
-  }
-};
-
-const canRefreshDashboard = () => {
-  const isVisible = typeof document === 'undefined' || document.visibilityState === 'visible';
-  const isOnline = typeof navigator === 'undefined' || navigator.onLine;
-  return isVisible && isOnline;
-};
-
-const toneStyles: Record<StatTone, string> = {
-  blue: 'border-blue-100 bg-blue-50 text-blue-700',
-  emerald: 'border-emerald-100 bg-emerald-50 text-emerald-700',
-  amber: 'border-amber-100 bg-amber-50 text-amber-700',
-  slate: 'border-slate-200 bg-slate-100 text-slate-700',
-  rose: 'border-rose-100 bg-rose-50 text-rose-700',
-};
-
-type StatTileProps = {
-  icon: React.ElementType;
-  title: string;
-  value: string;
-  caption: string;
-  tone: StatTone;
-  trend?: string;
-};
-
-const StatTile = ({ icon: Icon, title, value, caption, tone, trend }: StatTileProps) => (
-  <div className="motion-fade-up motion-soft-lift motion-glow relative overflow-hidden rounded-[2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-26px_rgba(15,23,42,0.35)]">
-    <div className="absolute left-0 right-0 top-0 h-1 bg-gradient-to-l from-transparent via-slate-200 to-transparent" />
-    <div className="flex items-start justify-between gap-4">
-      <div className={`flex h-14 w-14 items-center justify-center rounded-[1.4rem] border ${toneStyles[tone]}`}>
-        <Icon className="h-6 w-6" />
-      </div>
-      {trend ? (
-        <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-black text-slate-600">
-          <ArrowUpRight className="h-3.5 w-3.5" />
-          {trend}
-        </span>
-      ) : null}
-    </div>
-    <div className="mt-5">
-      <p className="text-xs font-black tracking-[0.18em] text-slate-400">{title}</p>
-      <p className="mt-3 text-3xl font-black text-slate-900">{value}</p>
-      <p className="mt-2 text-sm font-bold text-slate-500">{caption}</p>
-    </div>
-  </div>
-);
-
-const SectionCard = ({ title, subtitle, icon: Icon, children }: { title: string; subtitle?: string; icon: React.ElementType; children: React.ReactNode }) => (
-  <section className="motion-fade-up motion-fade-up-delay-1 rounded-[2.2rem] border border-white/70 bg-white p-5 shadow-[0_18px_45px_-28px_rgba(15,23,42,0.28)] sm:p-7">
-    <div className="mb-6 flex items-start justify-between gap-4">
-      <div>
-        <h3 className="flex items-center gap-2 text-xl font-black text-slate-900">
-          <Icon className="h-5 w-5 text-amber-500" />
-          {title}
-        </h3>
-        {subtitle ? <p className="mt-2 text-sm font-bold text-slate-500">{subtitle}</p> : null}
-      </div>
-    </div>
-    {children}
-  </section>
-);
-
-const ReportMetric = ({
-  label,
-  value,
-  helper,
-  tone = 'slate',
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  tone?: StatTone;
-}) => (
-  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
-    <div className={`inline-flex rounded-full border px-3 py-1 text-[10px] font-black tracking-[0.16em] ${toneStyles[tone]}`}>{label}</div>
-    <p className="mt-4 text-2xl font-black text-slate-900">{value}</p>
-    <p className="mt-2 text-sm font-bold leading-6 text-slate-500">{helper}</p>
-  </div>
-);
 
 const DashboardView: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -170,7 +52,7 @@ const DashboardView: React.FC = () => {
   const [dateRange, setDateRange] = useState<DateRange>('month');
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const chartContainerRef = useRef<HTMLDivElement | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
   const isFetchingRef = useRef(false);
   const pollTimeoutRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
@@ -188,76 +70,22 @@ const DashboardView: React.FC = () => {
 
     setLoadError(null);
 
-    let ordersQuery = supabase.from('orders').select('*');
-    const now = new Date();
-
-    if (dateRange === 'today') {
-      ordersQuery = ordersQuery.gte('created_at', startOfDay(now).toISOString());
-    } else if (dateRange === 'week') {
-      ordersQuery = ordersQuery.gte('created_at', subDays(now, 7).toISOString());
-    } else if (dateRange === 'month') {
-      ordersQuery = ordersQuery.gte('created_at', subDays(now, 30).toISOString());
-    }
-
     try {
-      const dashboardRequests: Array<Promise<any>> = [
-        queryWithRetry((signal) => ordersQuery.abortSignal(signal).order('created_at', { ascending: false })),
-        queryWithRetry((signal) => supabase.from('products').select('*').eq('is_deleted', false).abortSignal(signal)),
-        queryWithRetry((signal) => supabase.from('profiles').select('*').abortSignal(signal)),
-        queryWithRetry((signal) => supabase.from('order_items').select('*').abortSignal(signal)),
-        queryWithRetry((signal) => supabase.from('shifts').select('*').order('start_time', { ascending: false }).limit(50).abortSignal(signal)),
-        queryWithRetry((signal) => supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name').abortSignal(signal)),
-      ];
-
-      const [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult] = await Promise.allSettled(dashboardRequests);
+      const snapshot = await fetchDashboardSnapshot(dateRange);
 
       if (!mountedRef.current) return;
 
-      const failedResults = [ordersResult, productsResult, usersResult, orderItemsResult, shiftsResult, branchesResult].filter(
-      (result) => result.status === 'rejected',
-      );
+      if (snapshot.hasPartialFailure) {
+        setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. البيانات المعروضة قد تكون أقدم قليلًا وسيتم التحديث تلقائيًا.');
+      }
 
-    if (failedResults.length > 0) {
-      setLoadError('تعذر تحميل بعض بيانات لوحة التحكم. البيانات المعروضة قد تكون أقدم قليلًا وسيتم التحديث تلقائيًا.');
-    }
-
-    if (ordersResult.status === 'fulfilled' && !ordersResult.value.error) {
-      setOrders((ordersResult.value.data || []) as Order[]);
-    } else if (orders.length === 0) {
-      setOrders([]);
-    }
-
-    if (productsResult.status === 'fulfilled' && !productsResult.value.error) {
-      setProducts((productsResult.value.data || []) as Product[]);
-    } else if (products.length === 0) {
-      setProducts([]);
-    }
-
-    if (usersResult.status === 'fulfilled' && !usersResult.value.error) {
-      setUsers((usersResult.value.data || []) as Profile[]);
-    } else if (users.length === 0) {
-      setUsers([]);
-    }
-
-    if (orderItemsResult.status === 'fulfilled' && !orderItemsResult.value.error) {
-      setOrderItems((orderItemsResult.value.data || []) as OrderItem[]);
-    } else if (orderItems.length === 0) {
-      setOrderItems([]);
-    }
-
-    if (shiftsResult.status === 'fulfilled' && !shiftsResult.value.error) {
-      setShifts((shiftsResult.value.data || []) as Shift[]);
-    } else if (shifts.length === 0) {
-      setShifts([]);
-    }
-
-    if (branchesResult.status === 'fulfilled' && !branchesResult.value.error) {
-      setBranches((branchesResult.value.data || []) as Branch[]);
-    } else if (branches.length === 0) {
-      setBranches([]);
-    }
-
-      setLastUpdated(format(new Date(), 'HH:mm'));
+      setOrders(snapshot.orders);
+      setProducts(snapshot.products);
+      setUsers(snapshot.users);
+      setOrderItems(snapshot.orderItems);
+      setShifts(snapshot.shifts);
+      setBranches(snapshot.branches);
+      setLastUpdated(snapshot.lastUpdated);
     } finally {
       if (mountedRef.current) {
         setRefreshing(false);
@@ -266,7 +94,6 @@ const DashboardView: React.FC = () => {
       isFetchingRef.current = false;
     }
   };
-
   useEffect(() => {
     const refreshIfAvailable = (manual = false) => {
       if (!canRefreshDashboard() || isFetchingRef.current) return;
@@ -735,50 +562,15 @@ const DashboardView: React.FC = () => {
               </SectionCard>
             </div>
 
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_0.9fr]">
-              <SectionCard title="منحنى المبيعات" subtitle="حركة آخر 7 أيام بشكل سريع وواضح." icon={TrendingUp}>
-                <div ref={chartContainerRef} className="h-80 min-w-0">
-                  {chartSize.width > 0 && hasRecentSales ? (
-                    <BarChart width={chartSize.width} height={chartSize.height} data={last7Days}>
-                      <defs>
-                        <linearGradient id="salesGradient" x1="0" x2="0" y1="0" y2="1">
-                          <stop offset="0%" stopColor="#f59e0b" />
-                          <stop offset="100%" stopColor="#0f172a" />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="#eef2f7" vertical={false} />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
-                      <Tooltip
-                        contentStyle={{
-                          borderRadius: '18px',
-                          border: '1px solid #e2e8f0',
-                          boxShadow: '0 18px 40px rgba(15,23,42,0.12)',
-                        }}
-                        formatter={(value) => [formatMoney(Number(value || 0)), 'المبيعات']}
-                      />
-                      <Bar dataKey="sales" fill="url(#salesGradient)" radius={[12, 12, 4, 4]} barSize={34} />
-                    </BarChart>
-                    ) : loading ? (
-                      <LoadingState
-                        title="جاري تجهيز الرسم"
-                        subtitle="نجمع مؤشرات المبيعات ونبني نظرة سريعة للأداء."
-                        compact
-                        className="h-full min-h-[18rem]"
-                      />
-                    ) : (
-                      <div className="motion-fade-up flex h-full min-h-[18rem] flex-col items-center justify-center rounded-[1.9rem] border border-dashed border-slate-200 bg-gradient-to-b from-slate-50 to-white px-6 text-center">
-                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-[1.5rem] bg-amber-50 text-amber-500 shadow-[0_18px_35px_-28px_rgba(245,158,11,0.55)]">
-                          <TrendingUp className="h-8 w-8" />
-                        </div>
-                        <h4 className="text-xl font-black text-slate-800">لا توجد مبيعات كافية لعرض المنحنى الآن</h4>
-                        <p className="mt-3 max-w-md text-sm font-bold leading-7 text-slate-500">
-                          أول ما تبدأ الفواتير المؤكدة في التحرك خلال آخر 7 أيام، سيظهر الرسم هنا تلقائيًا بشكل واضح.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </SectionCard>
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+              <SalesChartCard
+                chartContainerRef={chartContainerRef}
+                chartSize={chartSize}
+                data={last7Days}
+                loading={loading}
+                hasRecentSales={hasRecentSales}
+                formatMoney={formatMoney}
+              />
 
               <SectionCard title="نبض التشغيل" subtitle="لقطات سريعة تساعدك تعرف أين تركز الآن." icon={ShieldCheck}>
                 <div className="space-y-4">
@@ -1046,3 +838,4 @@ const DashboardView: React.FC = () => {
 };
 
 export default DashboardView;
+
