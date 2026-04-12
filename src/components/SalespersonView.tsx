@@ -359,7 +359,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
     <div className="motion-page-enter flex h-full flex-col bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.07),transparent_20%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]" dir="rtl">
       <div className="motion-panel-reveal sticky top-0 z-40 border-b border-slate-100 bg-white/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1900px] flex-col gap-4 p-4 sm:p-6 xl:flex-row xl:items-center xl:justify-between">
-        <div className="relative w-full xl:w-[26rem]">
+        <div className="relative w-full xl:order-2 xl:w-[24rem] 2xl:w-[28rem]">
           <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -370,22 +370,22 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-3 sm:overflow-x-auto sm:pb-1 hide-scrollbar">
+        <div className="grid grid-cols-3 gap-2 rounded-[1.75rem] bg-slate-100/80 p-1.5 sm:flex sm:gap-2 sm:overflow-x-auto sm:pb-1 xl:order-1 xl:w-fit xl:items-center hide-scrollbar">
           <button
             onClick={() => setView('pos')}
-            className={`motion-button motion-press rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'pos' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`motion-button motion-press rounded-2xl border border-transparent px-3 py-3 text-sm font-black sm:shrink-0 sm:px-4 xl:min-w-[9.75rem] ${view === 'pos' ? 'bg-white text-slate-900 shadow-[0_12px_30px_-20px_rgba(37,99,235,0.55)]' : 'text-slate-500 hover:border-white/80 hover:bg-white/70'}`}
           >
             <span className="flex items-center gap-2"><ShoppingCart className="h-5 w-5" /> نقطة البيع</span>
           </button>
           <button
             onClick={() => setView('history')}
-            className={`motion-button motion-press rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'history' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`motion-button motion-press rounded-2xl border border-transparent px-3 py-3 text-sm font-black sm:shrink-0 sm:px-4 xl:min-w-[9.75rem] ${view === 'history' ? 'bg-white text-slate-900 shadow-[0_12px_30px_-20px_rgba(37,99,235,0.55)]' : 'text-slate-500 hover:border-white/80 hover:bg-white/70'}`}
           >
             <span className="flex items-center gap-2"><HistoryIcon className="h-5 w-5" /> متابعة مبيعاتي</span>
           </button>
           <button
             onClick={() => setView('search')}
-            className={`motion-button motion-press rounded-2xl px-3 py-3 text-sm font-black sm:shrink-0 sm:px-5 ${view === 'search' ? 'bg-blue-500 text-white shadow-lg' : 'bg-slate-100 text-slate-500'}`}
+            className={`motion-button motion-press rounded-2xl border border-transparent px-3 py-3 text-sm font-black sm:shrink-0 sm:px-4 xl:min-w-[9.75rem] ${view === 'search' ? 'bg-white text-slate-900 shadow-[0_12px_30px_-20px_rgba(37,99,235,0.55)]' : 'text-slate-500 hover:border-white/80 hover:bg-white/70'}`}
           >
             <span className="flex items-center gap-2"><ScanSearch className="h-5 w-5" /> البحث بالكود</span>
           </button>
@@ -441,7 +441,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
           </div>
         </div>
       ) : view === 'pos' ? (
-        <div className="mx-auto flex w-full max-w-[1900px] flex-1 flex-col overflow-hidden lg:flex-row lg:gap-6 lg:overflow-visible lg:px-4 lg:py-5">
+        <div className="mx-auto flex w-full max-w-[1900px] flex-1 flex-col overflow-hidden lg:min-h-0 lg:flex-row lg:items-start lg:gap-6 lg:px-4 lg:py-5">
           <div className="px-4 pt-4 lg:hidden">
             <div className="mb-4 grid grid-cols-2 gap-3">
               <div className="motion-fade-up motion-soft-lift rounded-[1.5rem] border border-white/80 bg-white/90 p-4 shadow-sm">
@@ -478,7 +478,25 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             </div>
           </div>
 
-          <div className="order-2 flex-1 overflow-y-auto px-4 pt-4 pb-28 sm:p-6 lg:order-1 lg:pb-6 lg:pr-0">
+          <div className="order-2 flex-1 overflow-y-auto px-4 pt-4 pb-28 sm:p-6 lg:order-1 lg:min-h-0 lg:self-stretch lg:pb-6 lg:pr-0">
+            <div className="mb-5 hidden lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-4">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900">مساحة البيع السريعة</h2>
+                <p className="mt-1 text-sm font-bold text-slate-500">اختَر المنتجات من اليسار، وراجع الطلب النهائي في اللوحة الجانبية قبل الإرسال للكاشير.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl border border-white/80 bg-white/90 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-black text-slate-400">البائع الحالي</p>
+                  <p className="text-sm font-black text-slate-900">{activeSellerName}</p>
+                </div>
+                {activeBranchName && (
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-black text-blue-700">الفرع</p>
+                    <p className="text-sm font-black text-blue-900">{activeBranchName}</p>
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
               {filteredProducts.map((product) => (
                 <button
@@ -539,7 +557,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
 
           <div
             ref={cartPanelRef}
-            className="order-1 z-10 flex w-full flex-col border-r border-slate-100 bg-white shadow-xl lg:order-2 lg:self-start lg:sticky lg:top-[7.75rem] lg:h-[calc(100vh-9rem)] lg:w-[380px] xl:w-[410px] 2xl:w-[440px] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-white/70 lg:shadow-[0_24px_65px_-36px_rgba(15,23,42,0.35)]"
+            className="order-1 z-10 flex w-full flex-col border-r border-slate-100 bg-white shadow-xl lg:order-2 lg:sticky lg:top-[7.75rem] lg:max-h-[calc(100dvh-9rem)] lg:min-h-0 lg:w-[380px] lg:self-start xl:w-[410px] 2xl:w-[440px] lg:overflow-hidden lg:rounded-[2rem] lg:border lg:border-white/70 lg:shadow-[0_24px_65px_-36px_rgba(15,23,42,0.35)]"
           >
             <div className="space-y-4 border-b border-slate-50 p-4 sm:p-6">
               <div className="motion-panel-reveal rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_70%)] p-5">
@@ -642,7 +660,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
               )}
             </div>
 
-            <div className="space-y-4 border-t border-slate-100 bg-slate-50 p-5 sm:p-6">
+            <div className="space-y-4 border-t border-slate-100 bg-slate-50 p-5 sm:p-6 lg:sticky lg:bottom-0 lg:z-10 lg:mt-auto lg:shadow-[0_-20px_45px_-34px_rgba(15,23,42,0.25)]">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-[10px] font-bold text-slate-400"><User className="ml-1 inline h-3 w-3" /> اسم العميل</label>
