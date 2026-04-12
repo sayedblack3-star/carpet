@@ -1,13 +1,24 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { getSafeSession, supabase } from '../supabase';
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import { getSafeSession } from '../supabase';
 import { Branch, Profile, UserRole } from '../types';
 import { Users, Edit2, Shield, X, Mail, ShieldCheck, Search, UserX, UserCheck, CheckCircle2, UserPlus, Lock, Eye, EyeOff, Building2, Trash2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
-import { getApiUrl } from '../lib/appUrl';
 import { normalizeEmail, normalizeText, validateEmail, validateStrongPassword } from '../lib/security';
 import { toFriendlyErrorMessage } from '../lib/errorMessages';
 import { LoadingCardGrid } from './ui/LoadingState';
+import {
+  createManagedUser,
+  deleteManagedUser,
+  fetchActiveBranches,
+  fetchManagedUsers,
+  syncManagedUserProfile,
+  updateManagedProfile,
+  updateUserApproval,
+  updateUserStatus,
+  type AdminCreateUserPayload,
+  type ProfileMutationPayload,
+} from '../lib/userManagementService';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'مدير عام',
@@ -24,72 +35,7 @@ const EMPTY_FORM: Partial<Profile> = {
   is_active: true,
 };
 
-type AdminCreateUserPayload = {
-  email: string;
-  password: string;
-  full_name: string;
-  role: UserRole;
-  branch_id: string | null;
-};
-
-type AdminDeleteUserPayload = {
-  user_id: string;
-};
-
-type AdminUsersApiPayload = AdminCreateUserPayload | AdminDeleteUserPayload;
-
-type ProfileMutationPayload = {
-  role: UserRole;
-  full_name: string;
-  employee_code?: string | null;
-  is_approved: boolean;
-  is_active: boolean;
-  branch_id?: string | null;
-};
-
 const getErrorMessage = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
-
-const getFreshAdminAccessToken = async () => {
-  const session = await getSafeSession();
-
-  if (!session?.access_token) {
-    throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
-  }
-
-  return session.access_token;
-};
-
-const refreshAdminAccessToken = async () => {
-  const { data, error } = await supabase.auth.refreshSession();
-
-  if (error || !data.session?.access_token) {
-    throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
-  }
-
-  return data.session.access_token;
-};
-
-const callAdminUsersApi = async (method: 'POST' | 'DELETE', payload: AdminUsersApiPayload) => {
-  const executeRequest = async (accessToken: string) =>
-    fetch(getApiUrl('/api/admin/users'), {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-  let accessToken = await getFreshAdminAccessToken();
-  let response = await executeRequest(accessToken);
-
-  if (response.status === 401) {
-    accessToken = await refreshAdminAccessToken();
-    response = await executeRequest(accessToken);
-  }
-
-  return response;
-};
 
 const UserManager: React.FC = () => {
   const [users, setUsers] = useState<Profile[]>([]);
@@ -157,9 +103,8 @@ const UserManager: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      setUsers((data || []) as Profile[]);
+      const data = await fetchManagedUsers();
+      setUsers(data);
     } catch (error) {
       console.error('Failed to fetch users:', error);
       toast.error('تعذر تحميل المستخدمين الآن.');
@@ -169,16 +114,15 @@ const UserManager: React.FC = () => {
   };
 
   const fetchBranches = async () => {
-    const { data, error } = await supabase.from('branches').select('id, name, slug, is_active').eq('is_active', true).order('name');
-    if (error) {
+    try {
+      const data = await fetchActiveBranches();
+      setBranchFeatureEnabled(true);
+      setBranches(data);
+    } catch (error) {
       console.warn('Failed to fetch branches for user manager:', error);
       setBranchFeatureEnabled(false);
       setBranches([]);
-      return;
     }
-
-    setBranchFeatureEnabled(true);
-    setBranches((data || []) as Branch[]);
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -211,28 +155,15 @@ const UserManager: React.FC = () => {
 
     setCreating(true);
     try {
-      const session = await getSafeSession();
-
-      if (!session?.access_token) {
-        throw new Error('انتهت الجلسة الحالية. يرجى تسجيل الدخول مرة أخرى.');
-      }
-
-      const response = await callAdminUsersApi('POST', {
+      const userPayload: AdminCreateUserPayload = {
         email: cleanEmail,
         password: newPassword,
         full_name: cleanName,
         role: newRole,
         branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
-      });
+      };
 
-      const result = await response
-        .json()
-        .catch(() => ({ error: response.status === 404 ? 'Admin user provisioning endpoint is not available.' : 'Unexpected server response.' }));
-      const error = response.ok ? null : new Error(result.error || 'تعذر إنشاء الحساب الجديد.');
-      const data = { user: result.user };
-
-      if (error) throw error;
-      if (!data.user) throw new Error('فشل في إنشاء المستخدم');
+      const user = await createManagedUser(userPayload);
 
       const payload: ProfileMutationPayload = {
         role: newRole,
@@ -245,19 +176,7 @@ const UserManager: React.FC = () => {
         payload.branch_id = newRole === 'admin' ? null : newBranchId || null;
       }
 
-      const { error: profileErr } = await supabase.from('profiles').update(payload).eq('id', data.user.id);
-
-      if (profileErr) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
-          email: cleanEmail,
-          full_name: cleanName,
-          role: newRole,
-          branch_id: branchFeatureEnabled && newRole !== 'admin' ? newBranchId || null : null,
-          is_approved: false,
-          is_active: true,
-        });
-      }
+      await syncManagedUserProfile(user.id, cleanEmail, payload);
 
       await logAction('user_created', {
         email: cleanEmail,
@@ -274,7 +193,7 @@ const UserManager: React.FC = () => {
       setNewName('');
       setNewRole('seller');
       setNewBranchId('');
-      fetchUsers();
+      await fetchUsers();
     } catch (error: unknown) {
       const message = getErrorMessage(error, 'تعذر إنشاء الحساب الجديد.');
       if (message.includes('already registered') || message.includes('already exists')) {
@@ -304,8 +223,7 @@ const UserManager: React.FC = () => {
         payload.branch_id = formData.role === 'admin' ? null : formData.branch_id || null;
       }
 
-      const { error } = await supabase.from('profiles').update(payload).eq('id', editingId);
-      if (error) throw error;
+      await updateManagedProfile(editingId, payload);
 
       await logAction('user_updated', {
         target_user_id: editingId,
@@ -317,7 +235,7 @@ const UserManager: React.FC = () => {
 
       toast.success('تم تحديث بيانات المستخدم');
       resetForm();
-      fetchUsers();
+      await fetchUsers();
     } catch (error: unknown) {
       toast.error(`خطأ: ${getErrorMessage(error, 'تعذر تحديث بيانات المستخدم الآن.')}`);
     }
@@ -330,28 +248,32 @@ const UserManager: React.FC = () => {
   };
 
   const toggleApproval = async (user: Profile) => {
-    const { error } = await supabase.from('profiles').update({ is_approved: !user.is_approved }).eq('id', user.id);
-    if (!error) {
+    try {
+      await updateUserApproval(user.id, !user.is_approved);
       await logAction('user_approval_changed', {
         target_user_id: user.id,
         email: user.email,
         is_approved: !user.is_approved,
       });
       toast.success(user.is_approved ? 'تم إلغاء التفعيل' : 'تم تفعيل الحساب');
-      fetchUsers();
+      await fetchUsers();
+    } catch (error) {
+      toast.error(`خطأ: ${getErrorMessage(error, 'تعذر تحديث حالة التفعيل الآن.')}`);
     }
   };
 
   const toggleStatus = async (user: Profile) => {
-    const { error } = await supabase.from('profiles').update({ is_active: !user.is_active }).eq('id', user.id);
-    if (!error) {
+    try {
+      await updateUserStatus(user.id, !user.is_active);
       await logAction('user_status_changed', {
         target_user_id: user.id,
         email: user.email,
         is_active: !user.is_active,
       });
       toast.info(user.is_active ? 'تم تجميد الحساب' : 'تم تفعيل الحساب');
-      fetchUsers();
+      await fetchUsers();
+    } catch (error) {
+      toast.error(`خطأ: ${getErrorMessage(error, 'تعذر تحديث حالة المستخدم الآن.')}`);
     }
   };
 
@@ -360,18 +282,7 @@ const UserManager: React.FC = () => {
 
     setDeleting(true);
     try {
-      const session = await getSafeSession();
-
-      if (!session?.access_token) {
-        throw new Error('انتهت الجلسة الحالية. سجل الدخول مرة أخرى ثم أعد المحاولة.');
-      }
-
-      const response = await callAdminUsersApi('DELETE', { user_id: userToDelete.id });
-
-      const result = await response.json().catch(() => ({ error: 'Unexpected server response.' }));
-      if (!response.ok) {
-        throw new Error(result.error || 'تعذر حذف المستخدم المحدد.');
-      }
+      await deleteManagedUser(userToDelete.id);
 
       await logAction('user_deleted', {
         target_user_id: userToDelete.id,
@@ -676,3 +587,4 @@ const UserManager: React.FC = () => {
 };
 
 export default UserManager;
+

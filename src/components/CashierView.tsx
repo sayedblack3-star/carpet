@@ -28,11 +28,24 @@ import { Order, OrderItem, Product } from '../types';
 import { setupRealtimeFallback } from '../lib/realtimeFallback';
 import { logAction } from '../lib/logger';
 import { toFriendlyErrorMessage } from '../lib/errorMessages';
+import {
+  cancelCashierOrder,
+  confirmCashierOrder,
+  deleteCashierOrderItem,
+  fetchCashierOrderItems,
+  fetchCashierOrders,
+  fetchCashierProducts,
+  fetchCashierSellerMeta,
+  insertCashierOrderItem,
+  markOrderUnderReview,
+  recalculateOrderTotals,
+  type SellerMeta,
+  updateCashierOrderItemQuantity,
+} from '../lib/cashierService';
+import { getPaymentMethodLabel, parseOrderNotes } from '../lib/orderMetadata';
 import ShiftManager from './ShiftManager';
 import { appClient } from '../config/appClient';
 import { LoadingState } from './ui/LoadingState';
-
-type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
 
 interface CashierViewProps {
   branchId?: string | null;
@@ -109,16 +122,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     setRefreshing(true);
 
     try {
-      let query = supabase.from('orders').select('*').in('status', ['sent_to_cashier', 'under_review', 'confirmed']);
-
-      if (branchEnabled && branchId) {
-        query = query.eq('branch_id', branchId);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: false }).limit(50);
-      if (error) throw error;
-
-      const nextOrders = (data || []) as Order[];
+      const nextOrders = await fetchCashierOrders(branchEnabled, branchId);
       setOrders(nextOrders);
       setRealtimeFallbackActive(false);
       setSelectedOrder((current) => {
@@ -135,9 +139,8 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
-      if (error) throw error;
-      setProducts((data || []) as Product[]);
+      const data = await fetchCashierProducts();
+      setProducts(data);
     } catch (error) {
       console.warn('Failed to fetch products for cashier:', error);
     }
@@ -145,22 +148,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
   const fetchSellerMeta = async () => {
     try {
-      let query = supabase.from('profiles').select('id, full_name, employee_code');
-      if (branchEnabled && branchId) {
-        query = query.eq('branch_id', branchId);
-      }
-
-      const { data, error } = await query;
-      if (error) throw error;
-
-      const mapped = ((data || []) as Array<{ id: string; full_name?: string; employee_code?: string }>).reduce<SellerMeta>((acc, profile) => {
-        acc[profile.id] = {
-          full_name: profile.full_name,
-          employee_code: profile.employee_code,
-        };
-        return acc;
-      }, {});
-
+      const mapped = await fetchCashierSellerMeta(branchEnabled, branchId);
       setSellerMeta(mapped);
     } catch (error) {
       console.warn('Failed to fetch seller meta:', error);
@@ -169,9 +157,8 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
   const fetchOrderItems = async (orderId: string) => {
     try {
-      const { data, error } = await supabase.from('order_items').select('*').eq('order_id', orderId);
-      if (error) throw error;
-      setOrderItems((data || []) as OrderItem[]);
+      const data = await fetchCashierOrderItems(orderId);
+      setOrderItems(data);
     } catch (error) {
       toast.error(toFriendlyErrorMessage(error, 'تعذر تحميل أصناف الفاتورة.'));
     }
@@ -189,7 +176,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   };
 
   const markOrderAsUnderReview = async (orderId: string) => {
-    await supabase.from('orders').update({ status: 'under_review' }).eq('id', orderId).neq('status', 'confirmed');
+    await markOrderUnderReview(orderId);
     if (selectedOrder?.id === orderId && selectedOrder.status !== 'confirmed') {
       setSelectedOrder({ ...selectedOrder, status: 'under_review' });
     }
@@ -198,26 +185,17 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   };
 
   const recalcOrderTotal = async (orderId: string) => {
-    const { data: items, error } = await supabase.from('order_items').select('total_price, discount_amount').eq('order_id', orderId);
-    if (error || !items) return;
-
-    const totalFinal = items.reduce((sum: number, item: any) => sum + (item.total_price || 0), 0);
-    const totalOriginal = items.reduce((sum: number, item: any) => sum + (item.total_price || 0) + (item.discount_amount || 0), 0);
-
-    await supabase
-      .from('orders')
-      .update({
-        total_final_price: totalFinal,
-        total_original_price: totalOriginal,
-      })
-      .eq('id', orderId);
-
-    await fetchOrders(false);
-    setSelectedOrder((current) =>
-      current?.id === orderId
-        ? { ...current, total_final_price: totalFinal, total_original_price: totalOriginal }
-        : current,
-    );
+    try {
+      const { totalFinal, totalOriginal } = await recalculateOrderTotals(orderId);
+      await fetchOrders(false);
+      setSelectedOrder((current) =>
+        current?.id === orderId
+          ? { ...current, total_final_price: totalFinal, total_original_price: totalOriginal }
+          : current,
+      );
+    } catch (error) {
+      console.warn('Failed to recalculate order total:', error);
+    }
   };
 
   const updateItemQuantity = async (itemId: string, newQty: number) => {
@@ -231,16 +209,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
       const unitDiscount = item.quantity > 0 ? (item.discount_amount || 0) / item.quantity : 0;
       const newDiscountAmount = unitDiscount * newQty;
 
-      const { error } = await supabase
-        .from('order_items')
-        .update({
-          quantity: newQty,
-          total_price: newTotal,
-          discount_amount: newDiscountAmount,
-        })
-        .eq('id', itemId);
-
-      if (error) throw error;
+      await updateCashierOrderItemQuantity(itemId, newQty, newTotal, newDiscountAmount);
 
       await markOrderAsUnderReview(selectedOrder.id);
       await fetchOrderItems(selectedOrder.id);
@@ -256,8 +225,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     if (!selectedOrder) return;
 
     try {
-      const { error } = await supabase.from('order_items').delete().eq('id', itemId);
-      if (error) throw error;
+      await deleteCashierOrderItem(itemId);
 
       await markOrderAsUnderReview(selectedOrder.id);
       await fetchOrderItems(selectedOrder.id);
@@ -282,7 +250,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
         return;
       }
 
-      const { error } = await supabase.from('order_items').insert({
+      await insertCashierOrderItem({
         order_id: selectedOrder.id,
         product_id: product.id,
         product_name: product.name,
@@ -291,8 +259,6 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
         discount_amount: unitDiscount,
         total_price: unitPrice,
       });
-
-      if (error) throw error;
 
       await markOrderAsUnderReview(selectedOrder.id);
       await fetchOrderItems(selectedOrder.id);
@@ -307,17 +273,11 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
   const markAsConfirmed = async (order: Order) => {
     try {
-      const { error } = await supabase
-        .from('orders')
-        .update({
-          status: 'confirmed',
-          payment_status: 'paid',
-          cashier_id: sessionUser?.id,
-          confirmed_at: new Date().toISOString(),
-        })
-        .eq('id', order.id);
-
-      if (error) throw error;
+      await confirmCashierOrder({
+        orderId: order.id,
+        cashierId: sessionUser?.id,
+        confirmedAt: new Date().toISOString(),
+      });
 
       await logAction('order_confirmed', { order_id: order.id, order_number: order.order_number, cashier_id: sessionUser?.id }, branchId || undefined);
       toast.success('تم تأكيد التحصيل بنجاح، ويمكن الآن طباعة الفاتورة.');
@@ -331,8 +291,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
   const cancelOrder = async (order: Order) => {
     try {
-      const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id);
-      if (error) throw error;
+      await cancelCashierOrder(order.id);
 
       await logAction('order_cancelled', { order_id: order.id, order_number: order.order_number }, branchId || undefined);
       toast.warning('تم إلغاء الطلب وإزالته من قائمة التحصيل.');
@@ -348,6 +307,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     if (!selectedOrder) return;
 
     const sellerCode = sellerMeta[selectedOrder.salesperson_id]?.employee_code;
+    const { plainNotes, metadata } = parseOrderNotes(selectedOrder.notes);
     const invoiceTotal = orderItems.reduce((sum, item) => sum + (item.total_price || 0), 0) || selectedOrder.total_final_price || 0;
     const invoiceDiscount = Math.max(0, (selectedOrder.total_original_price || 0) - invoiceTotal);
     const printWindow = window.open('', '_blank');
@@ -359,13 +319,19 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
     const rows = orderItems
       .map(
-        (item) => `
+        (item) => {
+          const product = productLookup[item.product_id];
+          const unitBeforeDiscount = item.quantity > 0 ? item.unit_price + (item.discount_amount || 0) / item.quantity : item.unit_price;
+          return `
           <tr>
+            <td>${product?.code || '-'}</td>
             <td>${item.product_name}</td>
             <td>${item.quantity}</td>
+            <td>${moneyFormatter.format(unitBeforeDiscount)} ج.م</td>
             <td>${moneyFormatter.format(item.unit_price)} ج.م</td>
             <td>${moneyFormatter.format(item.total_price)} ج.م</td>
-          </tr>`,
+          </tr>`;
+        },
       )
       .join('');
 
@@ -414,6 +380,8 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
         <div class="meta-card"><small>كود البائع</small><div>${sellerCode || '-'}</div></div>
         <div class="meta-card"><small>اسم العميل</small><div>${selectedOrder.customer_name || '-'}</div></div>
         <div class="meta-card"><small>الهاتف</small><div>${selectedOrder.customer_phone || '-'}</div></div>
+        <div class="meta-card"><small>العنوان</small><div>${metadata.customerAddress || '-'}</div></div>
+        <div class="meta-card"><small>طريقة الدفع</small><div>${getPaymentMethodLabel(metadata.paymentMethod)}</div></div>
         <div class="meta-card"><small>الفرع</small><div>${branchEnabled && branchName ? branchName : 'غير محدد'}</div></div>
         <div class="meta-card"><small>حالة الطلب</small><div>${selectedOrder.status === 'confirmed' ? 'تم التحصيل' : 'قيد المعالجة'}</div></div>
       `;
@@ -425,9 +393,11 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
         <table>
           <thead>
             <tr>
+              <th>كود المنتج</th>
               <th>الصنف</th>
               <th>الكمية</th>
-              <th>سعر الوحدة</th>
+              <th>قبل الخصم</th>
+              <th>بعد الخصم</th>
               <th>الإجمالي</th>
             </tr>
           </thead>
@@ -438,7 +408,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
           <div class="summary-row"><span>إجمالي الخصم</span><span>${moneyFormatter.format(invoiceDiscount)} ج.م</span></div>
           <div class="summary-row total"><span>الإجمالي النهائي</span><span>${moneyFormatter.format(invoiceTotal)} ج.م</span></div>
         </div>
-        ${selectedOrder.notes ? `<div class="note">ملاحظات: ${selectedOrder.notes}</div>` : ''}
+        ${plainNotes ? `<div class="note">ملاحظات: ${plainNotes}</div>` : ''}
         <div class="footer">شكرًا لتعاملكم مع ${appClient.companyNameAr}</div>
       `,
     );
@@ -473,6 +443,18 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   }, [productSearch, products]);
 
   const sellerCodeForSelected = selectedOrder ? sellerMeta[selectedOrder.salesperson_id]?.employee_code : '';
+  const productLookup = useMemo(
+    () =>
+      products.reduce<Record<string, Product>>((acc, product) => {
+        acc[product.id] = product;
+        return acc;
+      }, {}),
+    [products],
+  );
+  const selectedOrderMeta = useMemo(
+    () => parseOrderNotes(selectedOrder?.notes),
+    [selectedOrder?.notes],
+  );
   const pendingCount = orders.filter((order) => order.status === 'sent_to_cashier').length;
   const reviewCount = orders.filter((order) => order.status === 'under_review').length;
   const confirmedCount = orders.filter((order) => order.status === 'confirmed').length;
@@ -702,17 +684,25 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                     <p className="mt-1 text-sm font-black text-slate-800">{selectedOrder.customer_phone || '-'}</p>
                   </div>
                   <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
+                    <p className="text-[10px] font-bold text-slate-400">العنوان</p>
+                    <p className="mt-1 text-sm font-black text-slate-800">{selectedOrderMeta.metadata.customerAddress || '-'}</p>
+                  </div>
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
+                    <p className="text-[10px] font-bold text-slate-400">طريقة الدفع</p>
+                    <p className="mt-1 text-sm font-black text-slate-800">{getPaymentMethodLabel(selectedOrderMeta.metadata.paymentMethod)}</p>
+                  </div>
+                  <div className="rounded-[1.4rem] border border-slate-100 bg-white px-4 py-4 shadow-[0_18px_38px_-32px_rgba(15,23,42,0.28)]">
                     <p className="text-[10px] font-bold text-slate-400">التوقيت</p>
                     <p className="mt-1 text-sm font-black text-slate-800">{format(new Date(selectedOrder.created_at), 'HH:mm - yyyy/MM/dd')}</p>
                   </div>
                 </div>
 
-                {selectedOrder.notes && (
+                {selectedOrderMeta.plainNotes && (
                   <div className="motion-fade-up mt-4 flex items-start gap-3 rounded-[1.6rem] border border-amber-100 bg-gradient-to-l from-amber-50 to-orange-50 px-4 py-4 text-amber-900 shadow-[0_18px_36px_-30px_rgba(245,158,11,0.4)]">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                     <div>
                       <p className="text-[11px] font-black text-amber-700">ملاحظات الفاتورة</p>
-                      <p className="mt-1 text-sm font-bold">{selectedOrder.notes}</p>
+                      <p className="mt-1 text-sm font-bold">{selectedOrderMeta.plainNotes}</p>
                     </div>
                   </div>
                 )}
@@ -789,8 +779,10 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                   <table className="w-full min-w-[42rem] text-right">
                     <thead>
                       <tr className="border-b border-slate-100 bg-slate-50/70">
+                        <th className="px-6 py-4 text-[10px] font-bold text-slate-400">الكود</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400">المنتج</th>
-                        <th className="px-6 py-4 text-[10px] font-bold text-slate-400">السعر</th>
+                        <th className="px-6 py-4 text-[10px] font-bold text-slate-400">قبل الخصم</th>
+                        <th className="px-6 py-4 text-[10px] font-bold text-slate-400">بعد الخصم</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400">الكمية</th>
                         <th className="px-6 py-4 text-[10px] font-bold text-slate-400">الإجمالي</th>
                         {selectedOrder.status !== 'confirmed' && <th className="px-6 py-4 text-[10px] font-bold text-slate-400">إجراء</th>}
@@ -800,7 +792,29 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                       {orderItems.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-50/60">
                           <td className="px-6 py-4">
+                            <span className="rounded-xl bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-500">
+                              {productLookup[item.product_id]?.code || '-'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
                             <p className="font-bold text-slate-800">{item.product_name}</p>
+                            {(productLookup[item.product_id]?.size_label || productLookup[item.product_id]?.size_code) && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {productLookup[item.product_id]?.size_label && (
+                                  <span className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-black text-blue-700">
+                                    {productLookup[item.product_id]?.size_label}
+                                  </span>
+                                )}
+                                {productLookup[item.product_id]?.size_code && (
+                                  <span className="rounded-full bg-indigo-50 px-2 py-1 text-[10px] font-black text-indigo-700">
+                                    {productLookup[item.product_id]?.size_code}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 font-bold text-slate-500">
+                            {moneyFormatter.format(item.quantity > 0 ? item.unit_price + (item.discount_amount || 0) / item.quantity : item.unit_price)} ج.م
                           </td>
                           <td className="px-6 py-4 font-bold text-slate-700">{moneyFormatter.format(item.unit_price)} ج.م</td>
                           <td className="px-6 py-4">

@@ -26,6 +26,8 @@ export interface Product {
   id: string;
   code: string;
   name: string;
+  size_label?: string;
+  size_code?: string;
   description: string;
   price_buy: number;
   price_sell_before: number;

@@ -18,6 +18,8 @@ export default function ProductManager() {
   const [form, setForm] = useState({
     code: '',
     name: '',
+    size_label: '',
+    size_code: '',
     description: '',
     category: '',
     price_buy: 0,
@@ -51,6 +53,8 @@ export default function ProductManager() {
       ...form,
       code: normalizeText(form.code),
       name: normalizeText(form.name),
+      size_label: normalizeText(form.size_label),
+      size_code: normalizeText(form.size_code),
       description: normalizeText(form.description),
       category: normalizeText(form.category),
     };
@@ -98,6 +102,8 @@ export default function ProductManager() {
       const items = productsSeed.map((product: any) => ({
         code: product.code,
         name: product.name,
+        size_label: product.size_label || '',
+        size_code: product.size_code || '',
         price_sell_before: product.price_before || 0,
         price_sell_after: product.price_after || 0,
         stock_quantity: 10,
@@ -128,6 +134,8 @@ export default function ProductManager() {
     setForm({
       code: '',
       name: '',
+      size_label: '',
+      size_code: '',
       description: '',
       category: '',
       price_buy: 0,
@@ -144,6 +152,8 @@ export default function ProductManager() {
     setForm({
       code: product.code,
       name: product.name,
+      size_label: product.size_label || '',
+      size_code: product.size_code || '',
       description: product.description || '',
       category: product.category || '',
       price_buy: product.price_buy || 0,
@@ -206,6 +216,17 @@ export default function ProductManager() {
               <div>
                 <label className="text-xs font-bold text-slate-400 block mb-1">اسم المنتج</label>
                 <input required type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-50 border font-bold outline-none focus:ring-2 focus:ring-purple-100" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">المقاس</label>
+                  <input type="text" value={form.size_label} onChange={(e) => setForm({ ...form, size_label: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-50 border font-bold outline-none" placeholder="مثال: 160×90" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 block mb-1">كود المقاس</label>
+                  <input type="text" value={form.size_code} onChange={(e) => setForm({ ...form, size_code: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-50 border font-bold outline-none" placeholder="مثال: XL أو 160x90" />
+                </div>
               </div>
 
               <div>
@@ -284,6 +305,12 @@ export default function ProductManager() {
 
                 <h3 className="font-black text-slate-800 mb-1 line-clamp-2 leading-snug">{product.name}</h3>
                 <p className="text-xs text-slate-400 mb-4">{product.category || 'بدون تصنيف'}</p>
+                {(product.size_label || product.size_code) && (
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {product.size_label && <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">المقاس: {product.size_label}</span>}
+                    {product.size_code && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700">كود المقاس: {product.size_code}</span>}
+                  </div>
+                )}
 
                 <div className="flex items-end justify-between mb-4">
                   <div>

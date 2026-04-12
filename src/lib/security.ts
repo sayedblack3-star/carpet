@@ -26,6 +26,8 @@ export const validateStrongPassword = (value: string) => {
 export const validateProductPayload = (payload: {
   code: string;
   name: string;
+  size_label?: string;
+  size_code?: string;
   price_buy: number;
   price_sell_before: number;
   price_sell_after: number;
@@ -34,6 +36,14 @@ export const validateProductPayload = (payload: {
 }) => {
   if (!normalizeText(payload.code) || !normalizeText(payload.name)) {
     return 'كود المنتج واسم المنتج مطلوبان.';
+  }
+
+  if (payload.size_label && normalizeText(payload.size_label).length > 40) {
+    return 'المقاس طويل أكثر من اللازم.';
+  }
+
+  if (payload.size_code && normalizeText(payload.size_code).length > 40) {
+    return 'كود المقاس طويل أكثر من اللازم.';
   }
 
   if (payload.price_buy < 0 || payload.price_sell_before <= 0 || payload.price_sell_after < 0) {

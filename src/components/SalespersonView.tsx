@@ -36,6 +36,7 @@ import {
   type SellerProfileUpdatePayload,
   updateSalespersonProfile,
 } from '../lib/salespersonService';
+import { serializeOrderNotes, type PaymentMethod } from '../lib/orderMetadata';
 
 interface SalespersonViewProps {
   branchId?: string | null;
@@ -44,6 +45,11 @@ interface SalespersonViewProps {
 }
 
 const moneyFormatter = new Intl.NumberFormat('ar-EG');
+const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
+  { value: 'cash', label: 'كاش' },
+  { value: 'visa', label: 'فيزا' },
+  { value: 'cash_and_visa', label: 'كاش + فيزا' },
+];
 
 const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName, branchEnabled = false }) => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -52,6 +58,8 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const [notes, setNotes] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [myOrders, setMyOrders] = useState<Order[]>([]);
   const [sessionUser, setSessionUser] = useState<SupabaseUser | null>(null);
@@ -277,7 +285,10 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         payment_status: 'unpaid',
         total_original_price: originalTotal,
         total_final_price: total,
-        notes: normalizeText(notes),
+        notes: serializeOrderNotes(normalizeText(notes), {
+          customerAddress: normalizeText(customerAddress),
+          paymentMethod,
+        }),
         sent_to_cashier_at: new Date().toISOString(),
       };
 
@@ -315,6 +326,8 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
       setNotes('');
       setCustomerName('');
       setCustomerPhone('');
+      setCustomerAddress('');
+      setPaymentMethod('cash');
       await fetchMyOrders(sessionUser.id, currentProfile?.branch_id || branchId || undefined);
       setView('history');
     } catch (error) {
@@ -488,6 +501,12 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                       {product.stock_quantity > 0 ? `متاح: ${product.stock_quantity}` : 'نفد'}
                     </span>
                   </div>
+                  {(product.size_label || product.size_code) && (
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {product.size_label && <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">{product.size_label}</span>}
+                      {product.size_code && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700">{product.size_code}</span>}
+                    </div>
+                  )}
                   <h3 className="mb-2 line-clamp-2 text-lg font-black leading-8 text-slate-800 transition group-hover:text-blue-600">{product.name}</h3>
                   <p className="mb-5 min-h-[2.75rem] line-clamp-2 text-xs font-bold leading-6 text-slate-400">{product.description || product.category || 'منتج جاهز للإضافة مباشرة إلى الفاتورة.'}</p>
                   <div className="mt-auto flex items-end justify-between">
@@ -632,6 +651,29 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                 <div>
                   <label className="mb-1 block text-[10px] font-bold text-slate-400"><Phone className="ml-1 inline h-3 w-3" /> رقم الهاتف</label>
                   <input type="tel" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} placeholder="اختياري" className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold text-slate-400"><Building2 className="ml-1 inline h-3 w-3" /> عنوان العميل</label>
+                <input type="text" value={customerAddress} onChange={(event) => setCustomerAddress(event.target.value)} placeholder="اختياري" className="w-full rounded-xl border bg-white px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-blue-100" />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-bold text-slate-400">طريقة الدفع</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {PAYMENT_METHOD_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setPaymentMethod(option.value)}
+                      className={`rounded-xl px-3 py-2.5 text-xs font-black transition ${
+                        paymentMethod === option.value
+                          ? 'bg-slate-900 text-white shadow'
+                          : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div>
