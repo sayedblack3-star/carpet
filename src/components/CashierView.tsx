@@ -35,6 +35,7 @@ import {
   fetchCashierOrderItems,
   fetchCashierOrders,
   fetchCashierProducts,
+  fetchCashierProductsByIds,
   fetchCashierSellerMeta,
   insertCashierOrderItem,
   markOrderUnderReview,
@@ -66,6 +67,8 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const [searchTerm, setSearchTerm] = useState('');
   const [sessionUser, setSessionUser] = useState<SupabaseUser | null>(null);
   const [productSearch, setProductSearch] = useState('');
+  const [debouncedProductSearch, setDebouncedProductSearch] = useState('');
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [sellerMeta, setSellerMeta] = useState<SellerMeta>({});
   const [realtimeFallbackActive, setRealtimeFallbackActive] = useState(false);
   const fallbackToastShownRef = useRef(false);
@@ -83,8 +86,6 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
         }
 
         await fetchOrders();
-        if (!isMounted) return;
-        await fetchProducts();
         if (!isMounted) return;
         await fetchSellerMeta();
       } catch (error) {
@@ -138,14 +139,50 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      const data = await fetchCashierProducts();
-      setProducts(data);
-    } catch (error) {
-      console.warn('Failed to fetch products for cashier:', error);
-    }
-  };
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedProductSearch(productSearch.trim());
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [productSearch]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const runSearch = async () => {
+      if (!debouncedProductSearch) {
+        setProductSearchLoading(false);
+        return;
+      }
+
+      setProductSearchLoading(true);
+      try {
+        const data = await fetchCashierProducts(debouncedProductSearch, 6);
+        if (!isCancelled) {
+          setProducts((current) => {
+            const merged = new Map(current.map((product) => [product.id, product]));
+            data.forEach((product) => merged.set(product.id, product));
+            return Array.from(merged.values());
+          });
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.warn('Failed to fetch products for cashier:', error);
+        }
+      } finally {
+        if (!isCancelled) {
+          setProductSearchLoading(false);
+        }
+      }
+    };
+
+    void runSearch();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedProductSearch]);
 
   const fetchSellerMeta = async () => {
     try {
@@ -160,6 +197,12 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     try {
       const data = await fetchCashierOrderItems(orderId);
       setOrderItems(data);
+      const relatedProducts = await fetchCashierProductsByIds(data.map((item) => item.product_id));
+      setProducts((current) => {
+        const merged = new Map(current.map((product) => [product.id, product]));
+        relatedProducts.forEach((product) => merged.set(product.id, product));
+        return Array.from(merged.values());
+      });
     } catch (error) {
       toast.error(toFriendlyErrorMessage(error, 'تعذر تحميل أصناف الفاتورة.'));
     }
@@ -765,7 +808,19 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                     />
                   </div>
 
-                  {matchingProducts.length > 0 && (
+                  {!productSearch.trim() && (
+                    <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 text-center font-bold text-slate-400">
+                      ابدأ بكتابة اسم المنتج أو كوده لإضافته.
+                    </div>
+                  )}
+
+                  {productSearch.trim() && productSearchLoading && (
+                    <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 text-center font-bold text-slate-400">
+                      جارٍ البحث عن المنتجات...
+                    </div>
+                  )}
+
+                  {!productSearchLoading && matchingProducts.length > 0 && (
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       {matchingProducts.map((product) => (
                         <button
@@ -790,7 +845,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                     </div>
                   )}
 
-                  {productSearch.trim() && matchingProducts.length === 0 && (
+                  {productSearch.trim() && !productSearchLoading && matchingProducts.length === 0 && (
                     <div className="rounded-[1.6rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 p-6 text-center font-bold text-slate-400">
                       لا توجد منتجات مطابقة لهذا البحث.
                     </div>

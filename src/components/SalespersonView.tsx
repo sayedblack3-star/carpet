@@ -54,6 +54,8 @@ const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
 const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName, branchEnabled = false }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [productSearchLoading, setProductSearchLoading] = useState(false);
   const [cart, setCart] = useState<(Product & { cartQuantity: number })[]>([]);
   const [notes, setNotes] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -100,9 +102,6 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             await fetchMyOrders(session.user.id, branchId || undefined);
           }
         }
-
-        if (!isMounted) return;
-        await fetchProducts();
       } catch (error) {
         console.warn('Salesperson session bootstrap skipped:', error);
       }
@@ -150,15 +149,49 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
     });
   }, [sessionUser?.id, currentProfile?.branch_id, branchId]);
 
-  const fetchProducts = async () => {
-    try {
-      const productsData = await fetchSalespersonProducts();
-      setProducts(productsData);
-    } catch (error) {
-      console.error('Failed to fetch products for seller:', error);
-      toast.error('تعذر تحميل المنتجات الآن.');
-    }
-  };
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const runSearch = async () => {
+      if (!debouncedSearchTerm) {
+        setProducts([]);
+        setProductSearchLoading(false);
+        return;
+      }
+
+      setProductSearchLoading(true);
+      try {
+        const productsData = await fetchSalespersonProducts(debouncedSearchTerm, 24);
+        if (!isCancelled) {
+          setProducts(productsData);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          console.error('Failed to search products for seller:', error);
+          toast.error('تعذر تحميل نتائج البحث الآن.');
+        }
+      } finally {
+        if (!isCancelled) {
+          setProductSearchLoading(false);
+        }
+      }
+    };
+
+    void runSearch();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [debouncedSearchTerm]);
+
 
   const fetchMyOrders = async (userId: string, activeBranchId?: string) => {
     try {
@@ -337,15 +370,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
     }
   };
 
-  const filteredProducts = useMemo(
-    () =>
-      products.filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.code.toLowerCase().includes(searchTerm.toLowerCase()),
-      ),
-    [products, searchTerm],
-  );
+  const filteredProducts = useMemo(() => products, [products]);
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price_sell_after || item.price_sell_before) * item.cartQuantity, 0);
   const originalSubtotal = cart.reduce((sum, item) => sum + item.price_sell_before * item.cartQuantity, 0);
@@ -498,6 +523,20 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
+              {!searchTerm.trim() && !productSearchLoading && (
+                <div className="col-span-full py-16 text-center text-slate-400">
+                  <Search className="mx-auto mb-4 h-16 w-16 opacity-30" />
+                  <p className="text-lg font-bold">ابدأ بكتابة اسم المنتج أو كوده</p>
+                </div>
+              )}
+
+              {searchTerm.trim() && productSearchLoading && (
+                <div className="col-span-full py-16 text-center text-slate-400">
+                  <Package className="mx-auto mb-4 h-16 w-16 opacity-30 animate-pulse" />
+                  <p className="text-lg font-bold">جارٍ البحث في المنتجات...</p>
+                </div>
+              )}
+
               {filteredProducts.map((product) => (
                 <button
                   key={product.id}
@@ -546,7 +585,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
                 </button>
               ))}
 
-              {filteredProducts.length === 0 && (
+              {searchTerm.trim() && !productSearchLoading && filteredProducts.length === 0 && (
                 <div className="col-span-full py-16 text-center text-slate-400">
                   <Package className="mx-auto mb-4 h-16 w-16 opacity-30" />
                   <p className="text-lg font-bold">لا توجد منتجات مطابقة</p>

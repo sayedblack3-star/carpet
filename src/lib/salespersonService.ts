@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { Order, Product, Profile } from '../types';
+import { searchProducts } from './productService';
 
 export interface SellerProfileUpdatePayload {
   full_name: string;
@@ -36,10 +37,12 @@ export const fetchSalespersonProfile = async (userId: string): Promise<Profile |
   return (data as Profile | null) ?? null;
 };
 
-export const fetchSalespersonProducts = async (): Promise<Product[]> => {
-  const { data, error } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
-  if (error) throw error;
-  return (data || []) as Product[];
+export const fetchSalespersonProducts = async (searchTerm = '', limit = 24): Promise<Product[]> => {
+  return searchProducts({
+    searchTerm,
+    limit,
+    activeOnly: true,
+  });
 };
 
 export const fetchSalespersonOrders = async (

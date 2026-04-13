@@ -7,14 +7,20 @@ import { toast } from 'sonner';
 import { logAction } from '../lib/logger';
 import { normalizeText, validateProductPayload } from '../lib/security';
 import { LoadingCardGrid } from './ui/LoadingState';
+import { fetchProductList } from '../lib/productService';
+
+const PAGE_SIZE = 24;
 
 export default function ProductManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [form, setForm] = useState({
     code: '',
     name: '',
@@ -30,15 +36,29 @@ export default function ProductManager() {
   });
 
   useEffect(() => {
-    fetchProducts();
-  }, []);
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm.trim());
+      setCurrentPage(1);
+    }, 300);
 
-  const fetchProducts = async () => {
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    void fetchProducts(debouncedSearchTerm, currentPage);
+  }, [debouncedSearchTerm, currentPage]);
+
+  const fetchProducts = async (nextSearchTerm = debouncedSearchTerm, page = currentPage) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.from('products').select('*').eq('is_deleted', false).order('created_at', { ascending: false });
-      if (error) throw error;
-      setProducts((data || []) as Product[]);
+      const result = await fetchProductList({
+        searchTerm: nextSearchTerm,
+        page,
+        pageSize: PAGE_SIZE,
+      });
+
+      setProducts(result.products);
+      setTotalCount(result.totalCount);
     } catch (error) {
       console.error('Failed to fetch products:', error);
       toast.error('تعذر تحميل المنتجات الآن.');
@@ -67,19 +87,35 @@ export default function ProductManager() {
 
     try {
       if (editingId) {
-        const { error } = await supabase.from('products').update({ ...payload, updated_at: new Date().toISOString() }).eq('id', editingId);
+        const { error } = await supabase
+          .from('products')
+          .update({ ...payload, updated_at: new Date().toISOString() })
+          .eq('id', editingId);
         if (error) throw error;
-        await logAction('product_updated', { product_id: editingId, code: payload.code, name: payload.name, price_sell_before: payload.price_sell_before, price_sell_after: payload.price_sell_after });
+        await logAction('product_updated', {
+          product_id: editingId,
+          code: payload.code,
+          name: payload.name,
+          price_sell_before: payload.price_sell_before,
+          price_sell_after: payload.price_sell_after,
+        });
         toast.success('تم تحديث المنتج');
       } else {
-        const { error } = await supabase.from('products').insert({ ...payload, is_active: true, is_deleted: false });
+        const { error } = await supabase
+          .from('products')
+          .insert({ ...payload, is_active: true, is_deleted: false });
         if (error) throw error;
-        await logAction('product_created', { code: payload.code, name: payload.name, price_sell_before: payload.price_sell_before, price_sell_after: payload.price_sell_after });
+        await logAction('product_created', {
+          code: payload.code,
+          name: payload.name,
+          price_sell_before: payload.price_sell_before,
+          price_sell_after: payload.price_sell_after,
+        });
         toast.success('تمت إضافة المنتج');
       }
 
       resetForm();
-      fetchProducts();
+      await fetchProducts();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'تعذر حفظ بيانات المنتج الآن.';
       toast.error(`خطأ: ${message}`);
@@ -92,7 +128,7 @@ export default function ProductManager() {
       const product = products.find((entry) => entry.id === id);
       await logAction('product_deleted', { product_id: id, code: product?.code || null, name: product?.name || null });
       toast.success('تم حذف المنتج');
-      fetchProducts();
+      await fetchProducts();
     }
   };
 
@@ -120,7 +156,7 @@ export default function ProductManager() {
 
       await logAction('products_imported', { imported_count: items.length });
       toast.success(`تم استيراد ${items.length} منتج بنجاح`);
-      fetchProducts();
+      await fetchProducts();
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'تعذر استيراد البيانات الآن.';
       toast.error(`خطأ في الاستيراد: ${message}`);
@@ -164,9 +200,7 @@ export default function ProductManager() {
     });
   };
 
-  const filtered = products.filter(
-    (product) => product.name.toLowerCase().includes(searchTerm.toLowerCase()) || product.code.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   return (
     <div className="p-4 sm:p-8 max-w-7xl mx-auto min-h-full" dir="rtl">
@@ -175,7 +209,7 @@ export default function ProductManager() {
           <h1 className="text-3xl font-black text-slate-800 flex items-center gap-3">
             <Package className="w-8 h-8 text-purple-600" /> إدارة المنتجات وتعديل الأسعار
           </h1>
-          <p className="text-slate-500 font-medium mt-1">{products.length} منتج مسجل</p>
+          <p className="text-slate-500 font-medium mt-1">{totalCount.toLocaleString('ar-EG')} منتج مسجل</p>
         </div>
         <div className="flex gap-3">
           <button
@@ -185,7 +219,13 @@ export default function ProductManager() {
           >
             <Upload className="w-4 h-4" /> {importing ? 'جارٍ الاستيراد...' : 'استيراد البيانات'}
           </button>
-          <button onClick={() => { resetForm(); setShowForm(true); }} className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-slate-800">
+          <button
+            onClick={() => {
+              resetForm();
+              setShowForm(true);
+            }}
+            className="px-6 py-3 bg-slate-900 text-white rounded-xl font-bold flex items-center gap-2 shadow-lg hover:bg-slate-800"
+          >
             <Plus className="w-5 h-5" /> إضافة منتج
           </button>
         </div>
@@ -272,7 +312,7 @@ export default function ProductManager() {
         أي تحديث في الأسعار أو بيانات المنتج من هنا ينعكس على شاشات البائع والكاشير في الموقع كله بعد الضغط على تحديث.
       </div>
 
-      <div className="relative max-w-md mb-8">
+      <div className="relative max-w-md mb-6">
         <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
         <input
           type="text"
@@ -283,61 +323,94 @@ export default function ProductManager() {
         />
       </div>
 
+      {!loading && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-bold text-slate-500 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <span>عرض {products.length.toLocaleString('ar-EG')} من أصل {totalCount.toLocaleString('ar-EG')} منتج</span>
+          <span>الصفحة {currentPage.toLocaleString('ar-EG')} من {totalPages.toLocaleString('ar-EG')}</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {loading
-          ? <LoadingCardGrid count={4} minHeightClassName="h-56" className="contents" />
-            : filtered.map((product) => (
-                <div key={product.id} className="motion-fade-up motion-soft-lift motion-glow bg-white p-5 rounded-2xl border shadow-sm hover:shadow-lg transition-all group">
-                <div className="flex justify-between items-start mb-3">
-                  <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-3 py-1 rounded-full">{product.code}</span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
-                      product.stock_quantity > product.min_stock_level
-                        ? 'bg-emerald-50 text-emerald-600'
-                        : product.stock_quantity > 0
-                          ? 'bg-amber-50 text-amber-600'
-                          : 'bg-red-50 text-red-600'
-                    }`}
-                  >
-                    {product.stock_quantity} قطعة
-                  </span>
+        {loading ? (
+          <LoadingCardGrid count={4} minHeightClassName="h-56" className="contents" />
+        ) : (
+          products.map((product) => (
+            <div key={product.id} className="motion-fade-up motion-soft-lift motion-glow bg-white p-5 rounded-2xl border shadow-sm hover:shadow-lg transition-all group">
+              <div className="flex justify-between items-start mb-3">
+                <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-3 py-1 rounded-full">{product.code}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-black ${
+                    product.stock_quantity > product.min_stock_level
+                      ? 'bg-emerald-50 text-emerald-600'
+                      : product.stock_quantity > 0
+                        ? 'bg-amber-50 text-amber-600'
+                        : 'bg-red-50 text-red-600'
+                  }`}
+                >
+                  {product.stock_quantity} قطعة
+                </span>
+              </div>
+
+              <h3 className="font-black text-slate-800 mb-1 line-clamp-2 leading-snug">{product.name}</h3>
+              <p className="text-xs text-slate-400 mb-4">{product.category || 'بدون تصنيف'}</p>
+              {(product.size_label || product.size_code) && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {product.size_label && <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">المقاس: {product.size_label}</span>}
+                  {product.size_code && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700">كود المقاس: {product.size_code}</span>}
                 </div>
+              )}
 
-                <h3 className="font-black text-slate-800 mb-1 line-clamp-2 leading-snug">{product.name}</h3>
-                <p className="text-xs text-slate-400 mb-4">{product.category || 'بدون تصنيف'}</p>
-                {(product.size_label || product.size_code) && (
-                  <div className="mb-4 flex flex-wrap gap-2">
-                    {product.size_label && <span className="rounded-full bg-blue-50 px-3 py-1 text-[10px] font-black text-blue-700">المقاس: {product.size_label}</span>}
-                    {product.size_code && <span className="rounded-full bg-indigo-50 px-3 py-1 text-[10px] font-black text-indigo-700">كود المقاس: {product.size_code}</span>}
-                  </div>
-                )}
-
-                <div className="flex items-end justify-between mb-4">
-                  <div>
-                    {product.price_sell_after > 0 && product.price_sell_after < product.price_sell_before ? (
-                      <>
-                        <span className="text-xs text-slate-400 line-through block">{product.price_sell_before}</span>
-                        <span className="text-lg font-black text-blue-600">{product.price_sell_after} ج.م</span>
-                      </>
-                    ) : (
-                      <span className="text-lg font-black text-slate-800">{product.price_sell_before} ج.م</span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                  <button onClick={() => startEdit(product)} className="flex-1 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1">
-                    <Edit2 className="w-3 h-3" /> تعديل
-                  </button>
-                  <button onClick={() => handleDelete(product.id)} className="py-2 px-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+              <div className="flex items-end justify-between mb-4">
+                <div>
+                  {product.price_sell_after > 0 && product.price_sell_after < product.price_sell_before ? (
+                    <>
+                      <span className="text-xs text-slate-400 line-through block">{product.price_sell_before}</span>
+                      <span className="text-lg font-black text-blue-600">{product.price_sell_after} ج.م</span>
+                    </>
+                  ) : (
+                    <span className="text-lg font-black text-slate-800">{product.price_sell_before} ج.م</span>
+                  )}
                 </div>
               </div>
-            ))}
+
+              <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                <button onClick={() => startEdit(product)} className="flex-1 py-2 bg-slate-900 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1">
+                  <Edit2 className="w-3 h-3" /> تعديل
+                </button>
+                <button onClick={() => handleDelete(product.id)} className="py-2 px-3 bg-red-50 text-red-500 rounded-xl hover:bg-red-100">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
-      {!loading && filtered.length === 0 && <p className="text-center py-16 text-slate-400 font-bold">لا توجد منتجات</p>}
+      {!loading && products.length === 0 && <p className="text-center py-16 text-slate-400 font-bold">لا توجد منتجات</p>}
+
+      {!loading && totalPages > 1 && (
+        <div className="mt-8 flex items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            disabled={currentPage === 1}
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            الصفحة السابقة
+          </button>
+          <span className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg">
+            {currentPage.toLocaleString('ar-EG')} / {totalPages.toLocaleString('ar-EG')}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+            disabled={currentPage === totalPages}
+            className="rounded-2xl border border-slate-200 bg-white px-5 py-3 font-black text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            الصفحة التالية
+          </button>
+        </div>
+      )}
     </div>
   );
 }

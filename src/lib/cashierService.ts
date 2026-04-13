@@ -1,5 +1,6 @@
 import { Order, OrderItem, Product } from '../types';
 import { supabase } from '../supabase';
+import { fetchProductsByIds, searchProducts } from './productService';
 
 export type SellerMeta = Record<string, { employee_code?: string; full_name?: string }>;
 
@@ -21,10 +22,16 @@ export const fetchCashierOrders = async (
   return (data || []) as Order[];
 };
 
-export const fetchCashierProducts = async (): Promise<Product[]> => {
-  const { data, error } = await supabase.from('products').select('*').eq('is_active', true).eq('is_deleted', false);
-  if (error) throw error;
-  return (data || []) as Product[];
+export const fetchCashierProducts = async (searchTerm = '', limit = 6): Promise<Product[]> => {
+  return searchProducts({
+    searchTerm,
+    limit,
+    activeOnly: true,
+  });
+};
+
+export const fetchCashierProductsByIds = async (productIds: string[]): Promise<Product[]> => {
+  return fetchProductsByIds(productIds);
 };
 
 export const fetchCashierSellerMeta = async (

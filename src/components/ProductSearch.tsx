@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { supabase } from '../supabase';
 import { Product } from '../types';
 import { Search, Package, Tag } from 'lucide-react';
 import { toast } from 'sonner';
+import { findProductByCode } from '../lib/productService';
 
 export default function ProductSearch() {
   const [searchCode, setSearchCode] = useState('');
@@ -17,10 +17,7 @@ export default function ProductSearch() {
     setLoading(true);
     setSearched(true);
     try {
-      const { data, error } = await supabase.from('products').select('*').eq('code', searchCode.trim()).maybeSingle();
-
-      if (error) throw error;
-
+      const data = await findProductByCode(searchCode.trim());
       setProduct(data ? (data as Product) : null);
     } catch {
       toast.error('حدث خطأ أثناء البحث عن المنتج');
