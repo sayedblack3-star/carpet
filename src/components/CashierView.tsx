@@ -304,11 +304,10 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     }
   };
 
-  const handlePrintLegacy = () => {
-    if (!selectedOrder) return;
+  if (false && selectedOrder) {
 
     const printResult = printCashierInvoice({
-      order: selectedOrder,
+      order: selectedOrder as Order,
       orderItems,
       products,
       sellerMeta,
