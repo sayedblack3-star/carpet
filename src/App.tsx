@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
@@ -108,6 +108,11 @@ const App: React.FC = () => {
   const allowedTabs = useMemo(() => TABS.filter((tab) => tab.roles.includes(role as UserRole)), [role]);
   const currentBranch = useMemo(() => branches.find((branch) => branch.id === profile?.branch_id) || null, [branches, profile?.branch_id]);
   const getErrorMessage = (error: unknown) => (error instanceof Error ? error.message : 'Unknown error');
+  const selectTab = (tabId: string) => {
+    startTransition(() => {
+      setActiveTab(tabId);
+    });
+  };
 
   useEffect(() => {
     profileRef.current = profile;
@@ -195,7 +200,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (profile && !allowedTabs.find((tab) => tab.id === activeTab)) {
-      setActiveTab(allowedTabs[0]?.id || 'pos');
+      startTransition(() => {
+        setActiveTab(allowedTabs[0]?.id || 'pos');
+      });
     }
   }, [profile, activeTab, allowedTabs]);
 
@@ -388,7 +395,7 @@ const App: React.FC = () => {
           {allowedTabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => selectTab(tab.id)}
               data-active={activeTab === tab.id ? 'true' : 'false'}
               className={`w-full flex items-center gap-3 px-5 py-4 rounded-2xl font-bold transition-all ${
                 activeTab === tab.id ? 'motion-nav-pill motion-shimmer bg-amber-500 text-white shadow-xl shadow-amber-500/25' : 'motion-nav-pill text-slate-400 hover:bg-white/5 hover:text-white'
@@ -464,7 +471,7 @@ const App: React.FC = () => {
                   <button
                     key={tab.id}
                     onClick={() => {
-                      setActiveTab(tab.id);
+                      selectTab(tab.id);
                       setMobileMenuOpen(false);
                     }}
                     data-active={activeTab === tab.id ? 'true' : 'false'}
