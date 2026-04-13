@@ -14,7 +14,7 @@ interface ProductQueryOptions {
 }
 
 const PRODUCT_COLUMNS =
-  'id,code,name,size_label,size_code,description,price_buy,price_sell_before,price_sell_after,stock_quantity,min_stock_level,category,product_image,is_active,is_deleted,updated_at,updated_by,created_by,created_at';
+  'id,code,name,size_label,size_code,description,price_buy,price_sell_before,price_sell_after,stock_quantity,min_stock_level,category,is_active,is_deleted,updated_at,created_at';
 
 const normalizeProductSearch = (value: string) => value.trim();
 
