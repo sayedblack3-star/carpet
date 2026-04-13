@@ -51,6 +51,30 @@ export default function ReportsView() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
+  const downloadCsv = (filename: string, rows: Array<Record<string, string | number>>) => {
+    if (rows.length === 0) {
+      toast.info('لا توجد بيانات للتصدير في الفترة الحالية.');
+      return;
+    }
+
+    const headers = Object.keys(rows[0]);
+    const escapeValue = (value: string | number) => {
+      const text = String(value ?? '');
+      if (text.includes('"') || text.includes(',') || text.includes('\n')) {
+        return `"${text.replace(/"/g, '""')}"`;
+      }
+      return text;
+    };
+    const csv = [headers.join(','), ...rows.map((row) => headers.map((key) => escapeValue(row[key])).join(','))].join('\n');
+    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -247,6 +271,42 @@ export default function ReportsView() {
   const recentOrders = useMemo(() => filteredOrders.slice(0, 5), [filteredOrders]);
   const activeSellers = users.filter((user) => user.role === 'seller' && user.is_active).length;
 
+  const exportOrdersCsv = () => {
+    const rows = filteredOrders.map((order) => ({
+      'رقم الطلب': order.order_number,
+      التاريخ: format(new Date(order.created_at), 'yyyy-MM-dd HH:mm'),
+      الفرع: order.branch_id ? branchNames[order.branch_id] || 'فرع غير معروف' : 'بدون فرع',
+      البائع: order.salesperson_name || 'غير محدد',
+      العميل: order.customer_name || 'بدون اسم',
+      الحالة: getOrderStatusLabel(order.status),
+      الإجمالي: Math.round(order.total_final_price || 0),
+      'قبل الخصم': Math.round(order.total_original_price || 0),
+    }));
+
+    downloadCsv('reports-orders.csv', rows);
+  };
+
+  const exportTopProductsCsv = () => {
+    const rows = topProducts.map((product) => ({
+      المنتج: product.name,
+      الكمية: product.quantity,
+      الإيراد: Math.round(product.revenue || 0),
+    }));
+
+    downloadCsv('reports-top-products.csv', rows);
+  };
+
+  const exportSellerPerformanceCsv = () => {
+    const rows = sellerPerformance.map((seller) => ({
+      البائع: seller.name,
+      الطلبات: seller.orders,
+      الإيراد: Math.round(seller.revenue || 0),
+      'متوسط الفاتورة': Math.round(seller.avgTicket || 0),
+    }));
+
+    downloadCsv('reports-sellers.csv', rows);
+  };
+
   if (loading) {
     return (
       <div className="p-4 sm:p-8 max-w-7xl mx-auto min-h-full" dir="rtl">
@@ -313,6 +373,30 @@ export default function ReportsView() {
               تحديث
             </span>
           </button>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={exportOrdersCsv}
+              className="motion-button rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              تصدير الطلبات CSV
+            </button>
+            <button
+              type="button"
+              onClick={exportTopProductsCsv}
+              className="motion-button rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              تصدير المنتجات الأعلى
+            </button>
+            <button
+              type="button"
+              onClick={exportSellerPerformanceCsv}
+              className="motion-button rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              تصدير أداء البائعين
+            </button>
+          </div>
         </div>
       </header>
 
