@@ -535,6 +535,17 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
   const pendingCount = orders.filter((order) => order.status === 'sent_to_cashier').length;
   const reviewCount = orders.filter((order) => order.status === 'under_review').length;
   const confirmedCount = orders.filter((order) => order.status === 'confirmed').length;
+  const actionableOrders = useMemo(
+    () =>
+      orders
+        .filter((order) => order.status === 'sent_to_cashier' || order.status === 'under_review')
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    [orders],
+  );
+  const actionableTotal = useMemo(
+    () => actionableOrders.reduce((sum, order) => sum + (order.total_final_price || 0), 0),
+    [actionableOrders],
+  );
   const selectedOrderTotal = orderItems.reduce((sum, item) => sum + (item.total_price || 0), 0) || selectedOrder?.total_final_price || 0;
   const selectedOrderDiscount = Math.max(0, (selectedOrder?.total_original_price || 0) - selectedOrderTotal);
 
@@ -993,17 +1004,97 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
               </div>
             </>
           ) : (
-            <div className="rounded-[2.2rem] border border-dashed border-slate-200 bg-gradient-to-b from-white to-slate-50 px-6 py-12 text-center shadow-[0_25px_60px_-40px_rgba(15,23,42,0.25)]">
-              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[1.8rem] bg-slate-100 text-slate-400">
-                <ShoppingCart className="h-10 w-10" />
+            <div className="space-y-6">
+              <div className="rounded-[2.2rem] border border-white/70 bg-white p-6 shadow-[0_30px_70px_-42px_rgba(15,23,42,0.32)] sm:p-8">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.24em] text-slate-400">Cashier Overview</p>
+                    <h2 className="mt-2 text-2xl font-black text-slate-900">اختر طلبًا لبدء التحصيل</h2>
+                    <p className="mt-2 text-sm font-bold text-slate-500">ابدأ بالأقدم، وراجع التفاصيل قبل التأكيد والطباعة.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (actionableOrders[0]) {
+                        void selectOrder(actionableOrders[0]);
+                      }
+                    }}
+                    className="motion-button motion-press flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 font-black text-amber-700 transition hover:bg-amber-100"
+                  >
+                    <ShoppingCart className="h-4 w-4" />
+                    فتح أقدم طلب
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black text-slate-400">طلبات تحتاج مراجعة</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{pendingCount + reviewCount}</p>
+                  </div>
+                  <div className="rounded-[1.6rem] border border-slate-100 bg-slate-50 p-4">
+                    <p className="text-[10px] font-black text-slate-400">إجمالي المعلق</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{moneyFormatter.format(actionableTotal)} ج.م</p>
+                  </div>
+                  <div className="rounded-[1.6rem] border border-emerald-100 bg-emerald-50 p-4">
+                    <p className="text-[10px] font-black text-emerald-700">مؤكد اليوم</p>
+                    <p className="mt-2 text-2xl font-black text-emerald-800">{confirmedCount}</p>
+                  </div>
+                  <div className="rounded-[1.6rem] border border-blue-100 bg-blue-50 p-4">
+                    <p className="text-[10px] font-black text-blue-700">قيد المراجعة</p>
+                    <p className="mt-2 text-2xl font-black text-blue-800">{reviewCount}</p>
+                  </div>
+                </div>
               </div>
-              <h2 className="mb-3 text-3xl font-black text-slate-800">في انتظار عملية جديدة</h2>
-              <p className="mx-auto max-w-xl text-lg font-bold text-slate-400">
-                اختر فاتورة من القائمة لمراجعتها وتحصيلها أو لإضافة أصناف عليها قبل التأكيد.
-              </p>
-              <div className="mx-auto mt-6 flex max-w-2xl items-start gap-3 rounded-[1.7rem] border border-blue-100 bg-gradient-to-l from-blue-50 to-sky-50 px-5 py-4 text-right text-sm font-bold text-blue-900 shadow-[0_18px_38px_-30px_rgba(59,130,246,0.35)]">
-                <BadgeInfo className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
-                <span>أي تعديل يقوم به الكاشير على الفاتورة ينتقل مباشرة إلى البائع في شاشة متابعة مبيعاتي، لذلك ستبقى حالة الطلب "قيد المراجعة" حتى يتم التحصيل النهائي.</span>
+
+              <div className="rounded-[2.1rem] border border-white/70 bg-white p-6 shadow-[0_28px_60px_-38px_rgba(15,23,42,0.32)]">
+                <div className="mb-5 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900">طلبات تحتاج تحصيل</h3>
+                    <p className="text-sm font-bold text-slate-500">ابدأ بالأقدم لتقليل زمن الانتظار.</p>
+                  </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-600">
+                    {actionableOrders.length} طلب
+                  </span>
+                </div>
+
+                {actionableOrders.length > 0 ? (
+                  <div className="space-y-3">
+                    {actionableOrders.slice(0, 5).map((order) => (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => {
+                          void selectOrder(order);
+                        }}
+                        className="motion-button flex w-full items-center justify-between gap-4 rounded-[1.6rem] border border-slate-100 bg-slate-50 px-4 py-4 text-right shadow-sm hover:border-amber-100 hover:bg-amber-50"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black text-slate-900">طلب #{order.order_number}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            {order.customer_name || 'بدون اسم'} • {order.salesperson_name}
+                          </p>
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-black text-slate-900">{moneyFormatter.format(order.total_final_price || 0)} ج.م</p>
+                          <p className="mt-1 text-[11px] font-black text-amber-600">{order.status === 'under_review' ? 'قيد المراجعة' : 'بانتظار الكاشير'}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-[1.8rem] border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center text-sm font-bold text-slate-400">
+                    لا توجد طلبات معلّقة حاليًا. يمكنك مراجعة التحصيلات المؤكدة من التقارير.
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-[2.1rem] border border-blue-100 bg-gradient-to-l from-blue-50 to-sky-50 px-5 py-4 text-right text-sm font-bold text-blue-900 shadow-[0_18px_38px_-30px_rgba(59,130,246,0.35)]">
+                <div className="flex items-start gap-3">
+                  <BadgeInfo className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" />
+                  <span>
+                    أي تعديل يقوم به الكاشير على الفاتورة ينتقل مباشرة إلى البائع، لذلك تبقى حالة الطلب "قيد المراجعة" حتى يتم التحصيل النهائي.
+                  </span>
+                </div>
               </div>
             </div>
           )}
