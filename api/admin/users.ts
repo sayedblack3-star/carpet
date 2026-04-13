@@ -30,7 +30,12 @@ type ProfileRecord = {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const STRONG_PASSWORD_PATTERN = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{10,}$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ROLE_SET = new Set<UserRole>(['admin', 'seller', 'cashier']);
+const MAX_JSON_BODY_BYTES = 4096;
+const MAX_NAME_LENGTH = 120;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_PASSWORD_LENGTH = 128;
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
 };
@@ -44,10 +49,9 @@ const CORS_ALLOWED_ORIGINS = new Set([
 
 const getCorsHeaders = (request: Request) => {
   const origin = request.headers.get('origin')?.trim();
-  const allowOrigin = origin && CORS_ALLOWED_ORIGINS.has(origin) ? origin : '*';
 
   return {
-    'access-control-allow-origin': allowOrigin,
+    ...(origin && CORS_ALLOWED_ORIGINS.has(origin) ? { 'access-control-allow-origin': origin } : {}),
     'access-control-allow-methods': 'POST, DELETE, OPTIONS',
     'access-control-allow-headers': 'authorization, content-type',
     'access-control-max-age': '86400',
@@ -62,6 +66,7 @@ const buildHeaders = (request: Request, headers: Record<string, string> = {}) =>
 
 const normalizeText = (value: string) => value.trim().replace(/\s+/g, ' ');
 const normalizeEmail = (value: string) => normalizeText(value).toLowerCase();
+const isUuid = (value: string) => UUID_PATTERN.test(value);
 
 const json = (request: Request, body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -74,6 +79,30 @@ const empty = (request: Request, status = 204) =>
     status,
     headers: buildHeaders(request),
   });
+
+const ensureAllowedOrigin = (request: Request) => {
+  const origin = request.headers.get('origin')?.trim();
+  if (!origin) return null;
+  if (CORS_ALLOWED_ORIGINS.has(origin)) return null;
+
+  return json(request, { error: 'Origin is not allowed for this admin endpoint.' }, 403);
+};
+
+const ensureReasonableBodySize = (request: Request) => {
+  const contentLength = request.headers.get('content-length');
+  if (!contentLength) return null;
+
+  const parsedLength = Number.parseInt(contentLength, 10);
+  if (!Number.isFinite(parsedLength)) {
+    return json(request, { error: 'Invalid content length header.' }, 400);
+  }
+
+  if (parsedLength > MAX_JSON_BODY_BYTES) {
+    return json(request, { error: 'Request body is too large.' }, 413);
+  }
+
+  return null;
+};
 
 const isMissingRelationError = (message: string) => /relation .* does not exist/i.test(message);
 
@@ -273,7 +302,7 @@ const loadManagedUserProfile = async (
   );
 
   if (!actorRestResult.error) {
-    return { data: actorRestResult.data?.[0] || null, error: null };
+    return { data: Array.isArray(actorRestResult.data) ? actorRestResult.data[0] || null : null, error: null };
   }
 
   const actorResult = await actorClient
@@ -314,7 +343,7 @@ const hasSellerOrderHistory = async (
   );
 
   if (!actorRestResult.error) {
-    return { hasHistory: (actorRestResult.data || []).length > 0, error: null };
+    return { hasHistory: Array.isArray(actorRestResult.data) && actorRestResult.data.length > 0, error: null };
   }
 
   const actorResult = await actorClient
@@ -356,7 +385,7 @@ const hasAnotherActiveApprovedAdmin = async (
 
   if (!actorRestResult.error) {
     return {
-      hasAnotherAdmin: (actorRestResult.data || []).some((profile) => profile.id !== excludedUserId),
+      hasAnotherAdmin: Array.isArray(actorRestResult.data) && actorRestResult.data.some((profile: { id: string }) => profile.id !== excludedUserId),
       error: null,
     };
   }
@@ -430,6 +459,16 @@ export default async function handler(request: Request) {
   }
 
   try {
+    const originViolation = ensureAllowedOrigin(request);
+    if (originViolation) {
+      return originViolation;
+    }
+
+    const bodySizeViolation = ensureReasonableBodySize(request);
+    if (bodySizeViolation) {
+      return bodySizeViolation;
+    }
+
     const authorization = request.headers.get('authorization') || '';
     const accessToken = authorization.replace(/^Bearer\s+/i, '').trim();
 
@@ -456,6 +495,10 @@ export default async function handler(request: Request) {
       const targetUserId = normalizeText((payload as DeleteUserPayload).user_id || '');
       if (!targetUserId) {
         return json(request, { error: 'User id is required.' }, 400);
+      }
+
+      if (!isUuid(targetUserId)) {
+        return json(request, { error: 'User id format is invalid.' }, 400);
       }
 
       if (targetUserId === actor?.id) {
@@ -565,6 +608,18 @@ export default async function handler(request: Request) {
       return json(request, { error: 'Email, password, full name, and role are required.' }, 400);
     }
 
+    if (email.length > MAX_EMAIL_LENGTH) {
+      return json(request, { error: 'Email address is too long.' }, 400);
+    }
+
+    if (fullName.length > MAX_NAME_LENGTH) {
+      return json(request, { error: 'Full name is too long.' }, 400);
+    }
+
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      return json(request, { error: 'Password is too long.' }, 400);
+    }
+
     if (!EMAIL_PATTERN.test(email)) {
       return json(request, { error: 'Please provide a valid email address.' }, 400);
     }
@@ -575,6 +630,10 @@ export default async function handler(request: Request) {
 
     if (!ROLE_SET.has(role)) {
       return json(request, { error: 'Unsupported role.' }, 400);
+    }
+
+    if (branchId && !isUuid(branchId)) {
+      return json(request, { error: 'Branch id format is invalid.' }, 400);
     }
 
     const { error: branchFeatureError } = await actorClient.from('branches').select('id').limit(1);

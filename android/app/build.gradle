@@ -4,6 +4,26 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
+def resolveSigningValue = { String propertyName, String envName ->
+    def propertyValue = keystoreProperties.getProperty(propertyName)
+    if (propertyValue != null && propertyValue.toString().trim()) {
+        return propertyValue.toString().trim()
+    }
+
+    def envValue = System.getenv(envName)
+    if (envValue != null && envValue.toString().trim()) {
+        return envValue.toString().trim()
+    }
+
+    return null
+}
+
+def releaseStoreFile = resolveSigningValue('storeFile', 'CARPET_KEYSTORE_FILE')
+def releaseStorePassword = resolveSigningValue('storePassword', 'CARPET_KEYSTORE_PASSWORD')
+def releaseKeyAlias = resolveSigningValue('keyAlias', 'CARPET_KEY_ALIAS')
+def releaseKeyPassword = resolveSigningValue('keyPassword', 'CARPET_KEY_PASSWORD')
+def releaseSigningConfigured = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
 apply plugin: 'com.android.application'
 
 android {
@@ -11,11 +31,11 @@ android {
     compileSdk = rootProject.ext.compileSdkVersion
     signingConfigs {
         release {
-            if (keystorePropertiesFile.exists()) {
-                storeFile file(keystoreProperties['storeFile'])
-                storePassword keystoreProperties['storePassword']
-                keyAlias keystoreProperties['keyAlias']
-                keyPassword keystoreProperties['keyPassword']
+            if (releaseSigningConfigured) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
@@ -35,7 +55,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            if (keystorePropertiesFile.exists()) {
+            if (releaseSigningConfigured) {
                 signingConfig signingConfigs.release
             }
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'

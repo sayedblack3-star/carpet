@@ -43,6 +43,7 @@ import {
   updateCashierOrderItemQuantity,
 } from '../lib/cashierService';
 import { getPaymentMethodLabel, parseOrderNotes } from '../lib/orderMetadata';
+import { printCashierInvoice } from '../lib/cashierPrint';
 import ShiftManager from './ShiftManager';
 import { appClient } from '../config/appClient';
 import { LoadingState } from './ui/LoadingState';
@@ -303,9 +304,25 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
     }
   };
 
-  const handlePrint = () => {
+  const handlePrintLegacy = () => {
     if (!selectedOrder) return;
 
+    const printResult = printCashierInvoice({
+      order: selectedOrder,
+      orderItems,
+      products,
+      sellerMeta,
+      branchEnabled,
+      branchName,
+    });
+
+    if (!printResult.ok) {
+      toast.error('طھط¹ط°ط± ظپطھط­ ظ†ط§ظپط°ط© ط§ظ„ط·ط¨ط§ط¹ط©. طھط£ظƒط¯ ظ…ظ† ط§ظ„ط³ظ…ط§ط­ ط¨ط§ظ„ظ†ظˆط§ظپط° ط§ظ„ظ…ظ†ط¨ط«ظ‚ط©.');
+    }
+
+    return;
+
+    /*
     const sellerCode = sellerMeta[selectedOrder.salesperson_id]?.employee_code;
     const { plainNotes, metadata } = parseOrderNotes(selectedOrder.notes);
     const invoiceTotal = orderItems.reduce((sum, item) => sum + (item.total_price || 0), 0) || selectedOrder.total_final_price || 0;
@@ -415,6 +432,24 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
 
     printWindow.document.close();
     printWindow.print();
+    */
+  };
+
+  const handlePrint = () => {
+    if (!selectedOrder) return;
+
+    const printResult = printCashierInvoice({
+      order: selectedOrder,
+      orderItems,
+      products,
+      sellerMeta,
+      branchEnabled,
+      branchName,
+    });
+
+    if (!printResult.ok) {
+      toast.error('تعذر فتح نافذة الطباعة. تأكد من السماح بالنوافذ المنبثقة.');
+    }
   };
 
   const filteredOrders = useMemo(

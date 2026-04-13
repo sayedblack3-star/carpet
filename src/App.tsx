@@ -18,6 +18,7 @@ import BrandMark from './components/BrandMark';
 import LandingPage from './components/LandingPage';
 import { LoadingState } from './components/ui/LoadingState';
 import { getRuntimePlatform } from './lib/runtimePlatform';
+import { clearCachedProfile, readCachedProfile, writeCachedProfile } from './lib/profileCache';
 import { appClient } from './config/appClient';
 
 const TABS = [
@@ -33,50 +34,7 @@ const TABS = [
 
 const PROFILE_LOAD_TIMEOUT_MS = 10000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
-const PROFILE_CACHE_KEY = 'carpet-land-profile-cache-v1';
 const LOGIN_ROUTE = '/login';
-
-const readCachedProfile = (userId: string): Profile | null => {
-  if (typeof window === 'undefined') return null;
-
-  try {
-    const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!raw) return null;
-
-    const cache = JSON.parse(raw) as Record<string, Profile>;
-    return cache[userId] || null;
-  } catch {
-    return null;
-  }
-};
-
-const writeCachedProfile = (profile: Profile) => {
-  if (typeof window === 'undefined') return;
-
-  try {
-    const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
-    const cache = raw ? (JSON.parse(raw) as Record<string, Profile>) : {};
-    cache[profile.id] = profile;
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // Ignore cache write failures to keep auth flow resilient.
-  }
-};
-
-const clearCachedProfile = (userId?: string | null) => {
-  if (typeof window === 'undefined' || !userId) return;
-
-  try {
-    const raw = window.localStorage.getItem(PROFILE_CACHE_KEY);
-    if (!raw) return;
-
-    const cache = JSON.parse(raw) as Record<string, Profile>;
-    delete cache[userId];
-    window.localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cache));
-  } catch {
-    // Ignore cache cleanup failures.
-  }
-};
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -195,19 +153,22 @@ const App: React.FC = () => {
       if (!isMounted) return;
       setSession(nextSession);
 
-      if (nextSession) {
-        const currentProfile = profileRef.current;
-        const shouldRefreshProfile =
-          !currentProfile ||
-          currentProfile.id !== nextSession.user.id ||
-          event === 'USER_UPDATED';
+    if (nextSession) {
+      const currentProfile = profileRef.current;
+      const sameUser = currentProfile?.id === nextSession.user.id;
+      const shouldRefreshProfile =
+        !currentProfile ||
+        !sameUser ||
+        event === 'USER_UPDATED';
 
-        if (shouldRefreshProfile) {
-          if (!currentProfile || currentProfile.id !== nextSession.user.id) {
-            setLoading(true);
-          }
+      if (shouldRefreshProfile) {
+        if (!sameUser) {
+          clearCachedProfile(currentProfile?.id);
+          setProfile(null);
+          setLoading(true);
+        }
 
-          await fetchProfile(nextSession.user);
+        await fetchProfile(nextSession.user);
         } else {
           setLoading(false);
         }
@@ -277,6 +238,7 @@ const App: React.FC = () => {
 
       if (isProfileTimeout && cachedProfile && cachedProfile.id === user.id) {
         setProfile(cachedProfile);
+        toast.warning('تم استخدام نسخة محلية مؤقتة من الملف الشخصي بسبب بطء الاتصال.');
         return;
       }
 

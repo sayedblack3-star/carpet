@@ -70,6 +70,18 @@ The web app stays exactly as-is. The Android app is an additional wrapper around
    `npm run mobile:open`
 3. In Android Studio, build a debug APK or release APK from the `android/` project.
 
+### Android signing secrets
+
+- Do not commit a real `android/keystore.properties` file with passwords.
+- Use `android/keystore.properties.example` as a template only.
+- Release signing now supports either:
+  - a local ignored `android/keystore.properties` file
+  - or environment variables:
+    - `CARPET_KEYSTORE_FILE`
+    - `CARPET_KEYSTORE_PASSWORD`
+    - `CARPET_KEY_ALIAS`
+    - `CARPET_KEY_PASSWORD`
+
 ## Desktop App
 
 The desktop app is an Electron wrapper around the same React UI, the same Supabase database, and the same employee accounts.
