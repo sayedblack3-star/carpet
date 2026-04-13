@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-import { format } from 'date-fns';
+import { differenceInMinutes, format } from 'date-fns';
 import {
   AlertTriangle,
   BadgeInfo,
@@ -56,6 +56,15 @@ interface CashierViewProps {
 }
 
 const moneyFormatter = new Intl.NumberFormat('ar-EG');
+const formatAge = (createdAt: string) => {
+  const minutes = Math.max(0, differenceInMinutes(new Date(), new Date(createdAt)));
+  if (minutes < 1) return 'الآن';
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  const days = Math.floor(hours / 24);
+  return `منذ ${days} يوم`;
+};
 
 const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchEnabled = false }) => {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1019,6 +1028,7 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                         void selectOrder(actionableOrders[0]);
                       }
                     }}
+                    disabled={!actionableOrders[0]}
                     className="motion-button motion-press flex items-center justify-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 font-black text-amber-700 transition hover:bg-amber-100"
                   >
                     <ShoppingCart className="h-4 w-4" />
@@ -1073,10 +1083,13 @@ const CashierView: React.FC<CashierViewProps> = ({ branchId, branchName, branchE
                           <p className="mt-1 text-xs font-bold text-slate-500">
                             {order.customer_name || 'بدون اسم'} • {order.salesperson_name}
                           </p>
+                          <p className="mt-1 text-[11px] font-black text-slate-400">{formatAge(order.created_at)}</p>
                         </div>
                         <div className="text-left">
                           <p className="text-sm font-black text-slate-900">{moneyFormatter.format(order.total_final_price || 0)} ج.م</p>
-                          <p className="mt-1 text-[11px] font-black text-amber-600">{order.status === 'under_review' ? 'قيد المراجعة' : 'بانتظار الكاشير'}</p>
+                          <p className={`mt-1 text-[11px] font-black ${order.status === 'under_review' ? 'text-blue-600' : 'text-amber-600'}`}>
+                            {order.status === 'under_review' ? 'قيد المراجعة' : 'بانتظار الكاشير'}
+                          </p>
                         </div>
                       </button>
                     ))}
