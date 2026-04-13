@@ -1,18 +1,10 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
 import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
-import UserManager from './components/UserManager';
-import ProductManager from './components/ProductManager';
-import DashboardView from './components/DashboardView';
-import CashierView from './components/CashierView';
-import SalespersonView from './components/SalespersonView';
-import AuditLogsView from './components/AuditLogsView';
-import ShortagesView from './components/ShortagesView';
-import SalesHistory from './components/SalesHistory';
 import Login from './components/Login';
 import BrandMark from './components/BrandMark';
 import LandingPage from './components/LandingPage';
@@ -35,6 +27,15 @@ const TABS = [
 const PROFILE_LOAD_TIMEOUT_MS = 10000;
 const PROFILE_LOAD_TIMEOUT_MESSAGE = 'Timed out while loading the current profile.';
 const LOGIN_ROUTE = '/login';
+
+const DashboardView = lazy(() => import('./components/DashboardView'));
+const SalespersonView = lazy(() => import('./components/SalespersonView'));
+const CashierView = lazy(() => import('./components/CashierView'));
+const ProductManager = lazy(() => import('./components/ProductManager'));
+const SalesHistory = lazy(() => import('./components/SalesHistory'));
+const UserManager = lazy(() => import('./components/UserManager'));
+const AuditLogsView = lazy(() => import('./components/AuditLogsView'));
+const ShortagesView = lazy(() => import('./components/ShortagesView'));
 
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -76,6 +77,12 @@ VITE_SUPABASE_ANON_KEY=...`}</pre>
         <li>3. أعد تشغيل <code className="text-amber-300">npm run dev</code>.</li>
       </ol>
     </div>
+  </div>
+);
+
+const ViewLoadingFallback: React.FC<{ title: string; subtitle: string }> = ({ title, subtitle }) => (
+  <div className="p-4 sm:p-6">
+    <LoadingState title={title} subtitle={subtitle} className="w-full" />
   </div>
 );
 
