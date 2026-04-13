@@ -2,7 +2,7 @@ import React, { Suspense, lazy, startTransition, useEffect, useMemo, useRef, use
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase, supabaseConfigError } from './supabase';
 import { Branch, Profile, UserRole } from './types';
-import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff } from 'lucide-react';
+import { Users, Store, BarChart3, Package, ShoppingCart, History, ShieldAlert, LogOut, Menu, X, Building2, WifiOff, FileText } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 import Login from './components/Login';
@@ -19,6 +19,7 @@ const TABS = [
   { id: 'cashier', label: 'نظام التحصيل', icon: Store, roles: ['admin', 'cashier'] as UserRole[] },
   { id: 'inventory', label: 'إدارة المنتجات', icon: Package, roles: ['admin'] as UserRole[] },
   { id: 'sales', label: 'سجل المبيعات', icon: History, roles: ['admin', 'cashier'] as UserRole[] },
+  { id: 'reports', label: 'التقارير', icon: FileText, roles: ['admin'] as UserRole[] },
   { id: 'shortages', label: 'النواقص', icon: ShieldAlert, roles: ['admin', 'seller', 'cashier'] as UserRole[] },
   { id: 'users', label: 'إدارة المستخدمين', icon: Users, roles: ['admin'] as UserRole[] },
   { id: 'audit', label: 'سجل العمليات', icon: History, roles: ['admin'] as UserRole[] },
@@ -33,6 +34,7 @@ const SalespersonView = lazy(() => import('./components/SalespersonView'));
 const CashierView = lazy(() => import('./components/CashierView'));
 const ProductManager = lazy(() => import('./components/ProductManager'));
 const SalesHistory = lazy(() => import('./components/SalesHistory'));
+const ReportsView = lazy(() => import('./components/ReportsView'));
 const UserManager = lazy(() => import('./components/UserManager'));
 const AuditLogsView = lazy(() => import('./components/AuditLogsView'));
 const ShortagesView = lazy(() => import('./components/ShortagesView'));
@@ -370,6 +372,8 @@ const App: React.FC = () => {
         return <ProductManager />;
       case 'sales':
         return <SalesHistory branchId={profile.branch_id} branchEnabled={branchFeatureEnabled} isAdmin={profile.role === 'admin'} />;
+      case 'reports':
+        return <ReportsView />;
       case 'users':
         return <UserManager />;
       case 'audit':
@@ -452,7 +456,11 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="motion-page-enter flex-1 overflow-y-auto bg-[#fafbfc] safe-area-bottom">{renderContent()}</div>
+        <div className="motion-page-enter flex-1 overflow-y-auto bg-[#fafbfc] safe-area-bottom">
+          <Suspense fallback={<ViewLoadingFallback title="جاري تجهيز الشاشة" subtitle="نحمّل الواجهة المطلوبة وبياناتها قبل العرض." />}>
+            {renderContent()}
+          </Suspense>
+        </div>
 
         {mobileMenuOpen && (
           <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[100] sm:hidden" onClick={() => setMobileMenuOpen(false)}>
