@@ -71,6 +71,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const [savingSeller, setSavingSeller] = useState(false);
   const [realtimeFallbackActive, setRealtimeFallbackActive] = useState(false);
   const cartPanelRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const fallbackToastShownRef = useRef(false);
 
   useEffect(() => {
@@ -376,9 +377,12 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
   const originalSubtotal = cart.reduce((sum, item) => sum + item.price_sell_before * item.cartQuantity, 0);
   const totalDiscount = Math.max(0, originalSubtotal - subtotal);
   const cartCount = cart.reduce((sum, item) => sum + item.cartQuantity, 0);
+  const confirmedOrdersCount = myOrders.filter((order) => order.status === 'confirmed').length;
+  const recentOrders = myOrders.slice(0, 3);
   const activeSellerName = sellerForm.full_name || currentProfile?.full_name || 'البائع الحالي';
   const activeBranchName = branchEnabled ? branchName || 'بدون فرع' : null;
   const scrollToCartPanel = () => cartPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const focusSearchInput = () => searchInputRef.current?.focus();
 
   return (
     <div className="motion-page-enter flex h-full flex-col bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.07),transparent_20%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]" dir="rtl">
@@ -387,6 +391,7 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
         <div className="relative w-full xl:order-2 xl:w-[24rem] 2xl:w-[28rem]">
           <Search className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="ابحث بكود المنتج أو الاسم..."
             value={searchTerm}
@@ -524,9 +529,112 @@ const SalespersonView: React.FC<SalespersonViewProps> = ({ branchId, branchName,
             </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3">
               {!searchTerm.trim() && !productSearchLoading && (
-                <div className="col-span-full py-16 text-center text-slate-400">
-                  <Search className="mx-auto mb-4 h-16 w-16 opacity-30" />
-                  <p className="text-lg font-bold">ابدأ بكتابة اسم المنتج أو كوده</p>
+                <div className="col-span-full rounded-[2rem] border border-white/80 bg-white/75 p-6 shadow-[0_24px_60px_-42px_rgba(15,23,42,0.35)] backdrop-blur sm:p-8">
+                  <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                    <div>
+                      <div className="mb-6 flex items-start gap-4">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-[1.35rem] bg-blue-50 text-blue-600">
+                          <Search className="h-7 w-7" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-black text-slate-900">جاهز للبيع السريع</h3>
+                          <p className="mt-2 text-sm font-bold leading-7 text-slate-500">
+                            استخدم المساحة دي لمراجعة وضعك الحالي، ثم ابدأ البحث باسم المنتج أو كوده لإضافته مباشرة إلى الطلب.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
+                          <p className="text-[11px] font-black text-slate-400">الطلب الحالي</p>
+                          <p className="mt-2 text-2xl font-black text-slate-900">{cartCount}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">قطعة في السلة الآن</p>
+                        </div>
+                        <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
+                          <p className="text-[11px] font-black text-slate-400">طلباتك الأخيرة</p>
+                          <p className="mt-2 text-2xl font-black text-slate-900">{myOrders.length}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">طلب ظاهر في المتابعة</p>
+                        </div>
+                        <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-4">
+                          <p className="text-[11px] font-black text-slate-400">تم تأكيده</p>
+                          <p className="mt-2 text-2xl font-black text-emerald-600">{confirmedOrdersCount}</p>
+                          <p className="mt-1 text-xs font-bold text-slate-500">طلب أنهى مراجعته الكاشير</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        <button
+                          type="button"
+                          onClick={focusSearchInput}
+                          className="motion-button rounded-[1.35rem] border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 hover:bg-blue-100"
+                        >
+                          ابدأ البحث الآن
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setView('history')}
+                          className="motion-button rounded-[1.35rem] border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                        >
+                          راجع آخر الطلبات
+                        </button>
+                        <button
+                          type="button"
+                          onClick={scrollToCartPanel}
+                          className="motion-button rounded-[1.35rem] border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-100"
+                        >
+                          {cartCount > 0 ? 'راجع السلة الحالية' : 'جهّز بيانات الطلب'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-[1.75rem] border border-slate-100 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] font-black text-slate-400">لقطة سريعة</p>
+                          <h4 className="mt-1 text-lg font-black text-slate-900">آخر الطلبات</h4>
+                        </div>
+                        <HistoryIcon className="h-5 w-5 text-slate-300" />
+                      </div>
+
+                      {recentOrders.length > 0 ? (
+                        <div className="space-y-3">
+                          {recentOrders.map((order) => (
+                            <button
+                              key={order.id}
+                              type="button"
+                              onClick={() => setView('history')}
+                              className="motion-button flex w-full items-center justify-between rounded-[1.35rem] border border-slate-100 bg-white px-4 py-3 text-right shadow-sm hover:border-blue-100 hover:bg-blue-50/40"
+                            >
+                              <div>
+                                <p className="text-sm font-black text-slate-900">طلب #{order.order_number}</p>
+                                <p className="mt-1 text-xs font-bold text-slate-500">{order.customer_name || 'بدون اسم عميل'}</p>
+                              </div>
+                              <div className="text-left">
+                                <p className="text-sm font-black text-slate-900">{moneyFormatter.format(order.total_final_price || 0)} ج.م</p>
+                                <p className="mt-1 text-[11px] font-black text-slate-400">
+                                  {order.status === 'confirmed'
+                                    ? 'تم التأكيد'
+                                    : order.status === 'cancelled'
+                                      ? 'ملغي'
+                                      : order.status === 'under_review'
+                                        ? 'قيد المراجعة'
+                                        : 'بانتظار الكاشير'}
+                                </p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 text-center text-slate-400">
+                          <Clock className="mb-3 h-10 w-10 opacity-40" />
+                          <p className="text-sm font-black text-slate-600">لا توجد طلبات مرسلة بعد</p>
+                          <p className="mt-2 max-w-xs text-xs font-bold leading-6 text-slate-400">
+                            بمجرد إرسال أول طلب للكاشير، ستظهر هنا آخر الطلبات وحالتها بشكل سريع.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
